@@ -1,0 +1,117 @@
+:root {
+    --primary-dark: #32714a;
+    --primary-color: #70ffa7;
+    --secondary-color: #bbffd5;
+    --tertiary-color: rgb(255, 255, 255, 0.2);
+    --tertiary-light: rgb(255, 255, 255, 0.5);
+    --dark-color: #3c3c3c;
+    --light-color: #ffffff;
+}
+
+body {
+    background-color: var(--dark-color);
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.navbar-nav {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 7vh;
+}
+.navbar {
+    background: linear-gradient(to top, var(--dark-color), var(--primary-dark))
+}
+.navbar-brand {
+    font-weight: bold;
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+.navbar-brand:hover {
+    color: var(--secondary-color);
+}
+.nav-item {
+    margin: 0 30px;
+    font-size: 1.25rem;
+}
+.nav-link {
+    color: var(--light-color);
+}
+.nav-link::after {
+    content: '';
+    display: flex;
+    margin: auto;
+    width: 0;
+    height: 2px;
+    background: var(--primary-color);
+    transition: width .3s;
+}
+.nav-link:hover::after {
+    width: 100%;
+}
+.nav-link:hover {
+    color: var(--secondary-color) !important;
+}
+.active {
+    color: var(--primary-color) !important;
+}
+.db-wrapper {
+    padding: 2rem 2rem 2.5rem;
+}
+
+.table-card {
+    background: rgb(255, 255, 255, 0.08);
+    border: 1px solid var(--tertiary-color);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.table-header {
+    padding: 1.2rem 1.3rem;
+    border-bottom: 1px solid var(--tertiary-color);
+}
+
+.table-header h1 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+.table-header p {
+    margin: 0.25rem 0 0;
+    color: var(--tertiary-light);
+}
+
+.inventory-table thead th {
+    color: var(--secondary-color);
+    border-bottom-color: var(--tertiary-color);
+    white-space: nowrap;
+}
+
+.inventory-table td {
+    border-bottom-color: var(--tertiary-color);
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--tertiary-light);
+    padding: 1.2rem;
+}
+
+@media (max-width: 768px) {
+    .db-wrapper {
+        padding: 1rem;
+    }
+
+    .navbar-nav {
+        height: auto;
+    }
+
+    .nav-item {
+        margin: 0 10px;
+        font-size: 1rem;
+    }
+}

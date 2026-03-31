@@ -1,0 +1,53 @@
+import sqlite3
+import datetime
+
+# for fake data input
+#----------------------#
+# calling the today
+# function of date class
+import datetime
+
+now = datetime.datetime.now()
+fakeDateTime = now.strftime("%Y-%m-%d %H:%M:%S")
+fDate,fTime = fakeDateTime.split(' ')
+#----------------------#
+
+cnt = sqlite3.connect('bmeInventory.db') 
+cursor = cnt.cursor()
+
+### Fake data to see if the information will later display when joined
+fakeData = [(10110011, "LCD", 1, 5, fDate, fTime),(10115531, "Button", 1, 3, fDate, fTime),(12345670, "Arduino", 2, 14, fDate, fTime), (11143428, "Printer", 4, 1, fDate, fTime),(12345670, " LCD_2", 2, 4, fDate, fTime), (54321987, "LCD_I2C", 3, 20, fDate, fTime), (54322287, "LCD_VED", 1, 10, fDate, fTime), (22222222, "LCD_TRAIN", 3, 2, fDate, fTime), (11221122, "LCD_Switch",1,3, fDate, fTime)] # UPC, Name, Bin, Qty
+cnt.executemany("INSERT INTO item_bin (UPC, Name, BinID, Qty, Date, Time) VALUES(?,?,?,?,?,?)", fakeData)
+
+# ID to look for in Table1
+table1_id = 2  # Replace with the desired primary key
+
+# Execute the SQL query (USE TO RETURN DISPLAYABLE INFORMATION!!)
+cursor.execute('''
+    SELECT 
+        r.RoomID AS rooms_RoomID, r.RoomName AS rooms_RoomName,
+        w.WallID AS walls_WallID, w.WallName AS walls_WallName,
+        b.BinID AS bins_BinID, b.BinType AS bins_BinType,
+        ie.EntryID AS item_bin_EntryID, ie.UPC AS item_bin_UPC, ie.Qty AS item_bin_Qty, ie.Name AS item_bin_Name
+    FROM 
+        rooms r
+    JOIN
+        item_bin ie ON b.BinID = ie.BinID
+    JOIN
+        bins b ON w.WallID = b.WallID
+    JOIN 
+        walls w ON r.RoomID = w.RoomID;
+    
+''')
+
+# Fetch all results
+rows = cursor.fetchall()
+
+# Print the results
+for row in rows:
+    
+    print(row)
+
+# Close
+cnt.commit() # to save changes
+cnt.close()
