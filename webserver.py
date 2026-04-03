@@ -53,6 +53,10 @@ def db():
 
     return render_template('db.html', items=items)
 
+@app.route('/floorplan', methods=['GET'])
+def floorplan():
+    return render_template('floorplan.html')
+
 @app.route('/search', methods=['GET', 'POST'])
 def search():
     # Get the JSON passed by javascript

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BME Floor Plan</title>
+    <style>
+        :root {
+            --paper: #ececec;
+            --wall: #2f2f2f;
+            --ink: #2f2f2f;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: #d9d9d9;
+            color: var(--ink);
+        }
+
+        .navbar {
+            background: linear-gradient(to top, #3c3c3c, #32714a);
+            padding: 0.5rem 1rem;
+        }
+
+        .container-fluid {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 2rem;
+            color: #70ffa7;
+            text-decoration: none;
+        }
+
+        .navbar-nav {
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            gap: 24px;
+        }
+
+        .nav-link {
+            color: #fff;
+            text-decoration: none;
+            font-size: 1.1rem;
+        }
+
+        .nav-link.active { color: #70ffa7; }
+
+        .page {
+            max-width: 1240px;
+            margin: 20px auto;
+            padding: 0 12px;
+        }
+
+        .title {
+            margin: 0 0 8px;
+            font-size: 1.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .subtitle {
+            margin: 0 0 12px;
+            color: #4b4b4b;
+        }
+
+        .controls {
+            margin: 0 0 10px;
+            font-size: 0.95rem;
+            color: #3f3f3f;
+        }
+
+        .plan {
+            width: 100%;
+            aspect-ratio: 3 / 2;
+            background: var(--paper);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .plan svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .ref-layer {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        #show-ref:checked ~ .plan .ref-layer {
+            opacity: 0.55;
+        }
+
+        .wall-stroke {
+            stroke: var(--wall);
+            stroke-width: 4;
+            fill: none;
+            stroke-linecap: square;
+            stroke-linejoin: miter;
+        }
+
+        .detail-stroke {
+            stroke: #8f8f8f;
+            stroke-width: 1.4;
+            fill: none;
+        }
+
+        .h-box {
+            fill: var(--paper);
+            stroke: var(--wall);
+            stroke-width: 3;
+        }
+
+        .h-text {
+            fill: #202020;
+            font-size: 18px;
+            font-weight: 700;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+        }
+
+        .room-text {
+            fill: #1f1f1f;
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+        }
+
+        @media (max-width: 900px) {
+            .navbar-brand { font-size: 1.4rem; }
+            .navbar-nav { gap: 12px; }
+            .nav-link { font-size: 0.95rem; }
+            .title { font-size: 1.1rem; }
+            .room-text { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">BME Inventory</a>
+            <ul class="navbar-nav">
+                <li><a class="nav-link" href="/">Search</a></li>
+                <li><a class="nav-link" href="/db">Database</a></li>
+                <li><a class="nav-link" href="/edit">Editor</a></li>
+                <li><a class="nav-link active" href="/floorplan">Floorplan</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="page">
+        <h1 class="title">BME Floor Plan (Toilet Rooms Removed)</h1>
+        <p class="subtitle">Restarted trace with room walls and H cutouts aligned to the uploaded plan.</p>
+
+        <input id="show-ref" type="checkbox">
+        <label class="controls" for="show-ref">Show reference overlay for verification</label>
+
+        <section class="plan" aria-label="Recreated floor plan">
+            <svg viewBox="0 0 1152 768" role="img" aria-label="Room layout for 110, 110A, 110B, and 110C">
+                <image class="ref-layer" href="{{ url_for('static', filename='floorplan-reference.png') }}" x="0" y="0" width="1152" height="768" />
+
+                <!-- top main wall segmented around H box and center post -->
+                <path class="wall-stroke" d="M102 86 L178 86" />
+                <path class="wall-stroke" d="M202 86 L478 86" />
+                <path class="wall-stroke" d="M494 86 L628 86" />
+                <path class="wall-stroke" d="M742 86 L778 86" />
+                <path class="wall-stroke" d="M782 86 L1005 86" />
+
+                <!-- center post on top wall -->
+                <rect x="478" y="86" width="16" height="48" class="wall-stroke" />
+
+                <!-- 110A room walls -->
+                <path class="wall-stroke" d="M67 220 L67 609" />
+                <path class="wall-stroke" d="M67 244 L196 244" />
+                <path class="wall-stroke" d="M196 220 L196 244" />
+                <path class="wall-stroke" d="M196 266 L196 583" />
+                <path class="wall-stroke" d="M67 583 L196 583" />
+
+                <!-- 110 / 110A shared wall with cutout -->
+                <path class="wall-stroke" d="M194 86 L194 401" />
+                <path class="wall-stroke" d="M194 437 L194 583" />
+
+                <!-- 110C room walls -->
+                <path class="wall-stroke" d="M742 86 L1004 86" />
+                <path class="wall-stroke" d="M1004 86 L1004 226" />
+                <path class="wall-stroke" d="M742 226 L1004 226" />
+                <path class="wall-stroke" d="M742 132 L742 162" />
+                <path class="wall-stroke" d="M742 186 L742 226" />
+                <path class="wall-stroke" d="M742 162 L780 162" />
+                <path class="wall-stroke" d="M780 132 L780 162" />
+
+                <!-- 110 / 110B / 110C shared wall with two cutouts -->
+                <path class="wall-stroke" d="M824 226 L824 510" />
+                <path class="wall-stroke" d="M824 546 L824 653" />
+
+                <!-- 110B room walls (toilets omitted) -->
+                <path class="wall-stroke" d="M824 226 L995 226" />
+                <path class="wall-stroke" d="M995 226 L995 542" />
+                <path class="wall-stroke" d="M824 542 L995 542" />
+                <path class="wall-stroke" d="M824 542 L824 653" />
+                <path class="wall-stroke" d="M824 653 L780 653" />
+                <path class="wall-stroke" d="M780 653 L780 717" />
+                <path class="wall-stroke" d="M780 717 L834 717" />
+
+                <!-- 110 bottom boundary with openings -->
+                <path class="wall-stroke" d="M194 684 L304 684" />
+                <path class="wall-stroke" d="M360 684 L600 684" />
+                <path class="wall-stroke" d="M675 684 L780 684" />
+                <path class="wall-stroke" d="M304 684 L304 717" />
+                <path class="wall-stroke" d="M360 684 L360 717" />
+                <path class="wall-stroke" d="M600 684 L600 717" />
+                <path class="wall-stroke" d="M675 684 L675 717" />
+
+                <!-- H cutout boxes -->
+                <rect x="178" y="86" width="24" height="44" class="h-box" />
+                <text x="190" y="108" class="h-text">H</text>
+
+                <rect x="182" y="401" width="24" height="36" class="h-box" />
+                <text x="194" y="419" class="h-text">H</text>
+
+                <rect x="730" y="132" width="24" height="36" class="h-box" />
+                <text x="742" y="150" class="h-text">H</text>
+
+                <rect x="812" y="510" width="24" height="36" class="h-box" />
+                <text x="824" y="528" class="h-text">H</text>
+
+                <rect x="780" y="681" width="24" height="36" class="h-box" />
+                <text x="792" y="699" class="h-text">H</text>
+
+                <!-- door swing hints -->
+                <path class="detail-stroke" d="M196 266 A40 40 0 0 1 156 226" />
+                <path class="detail-stroke" d="M742 186 A48 48 0 0 1 790 234" />
+                <path class="detail-stroke" d="M824 510 A44 44 0 0 0 868 554" />
+                <path class="detail-stroke" d="M304 717 A30 30 0 0 0 334 687" />
+                <path class="detail-stroke" d="M675 717 A30 30 0 0 0 705 687" />
+
+                <!-- labels -->
+                <text class="room-text" x="510" y="420">110</text>
+                <text class="room-text" x="128" y="430">110A</text>
+                <text class="room-text" x="905" y="390">110B</text>
+                <text class="room-text" x="872" y="154">110C</text>
+            </svg>
+        </section>
+    </main>
+</body>
+</html>
