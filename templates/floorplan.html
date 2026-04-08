@@ -6,9 +6,14 @@
     <title>BME Floor Plan</title>
     <style>
         :root {
-            --paper: #ececec;
-            --wall: #2f2f2f;
-            --ink: #2f2f2f;
+            --primary-dark: #32714a;
+            --primary-color: #70ffa7;
+            --secondary-color: #bbffd5;
+            --tertiary-color: rgba(255, 255, 255, 0.2);
+            --tertiary-light: rgba(255, 255, 255, 0.5);
+            --dark-color: #3c3c3c;
+            --light-color: #ffffff;
+            --panel-bg: rgba(255, 255, 255, 0.08);
         }
 
         * { box-sizing: border-box; }
@@ -16,12 +21,12 @@
         body {
             margin: 0;
             font-family: "Segoe UI", Tahoma, sans-serif;
-            background: #d9d9d9;
-            color: var(--ink);
+            background: var(--dark-color);
+            color: var(--light-color);
         }
 
         .navbar {
-            background: linear-gradient(to top, #3c3c3c, #32714a);
+            background: linear-gradient(to top, var(--dark-color), var(--primary-dark));
             padding: 0.5rem 1rem;
         }
 
@@ -34,7 +39,7 @@
         .navbar-brand {
             font-weight: bold;
             font-size: 2rem;
-            color: #70ffa7;
+            color: var(--primary-color);
             text-decoration: none;
         }
 
@@ -43,220 +48,496 @@
             list-style: none;
             margin: 0;
             padding: 0;
-            gap: 24px;
+            flex-direction: row;
+            align-items: center;
+            height: 7vh;
         }
 
         .nav-link {
-            color: #fff;
+            color: var(--light-color);
             text-decoration: none;
-            font-size: 1.1rem;
         }
 
-        .nav-link.active { color: #70ffa7; }
+        .nav-item {
+            margin: 0 30px;
+            font-size: 1.25rem;
+        }
+
+        .nav-link::after {
+            content: '';
+            display: flex;
+            margin: auto;
+            width: 0;
+            height: 2px;
+            background: var(--primary-color);
+            transition: width .3s;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .nav-link.active { color: var(--primary-color); }
 
         .page {
-            max-width: 1240px;
-            margin: 20px auto;
-            padding: 0 12px;
+            min-height: calc(100vh - 72px);
+            padding: 24px 16px;
         }
 
-        .title {
-            margin: 0 0 8px;
-            font-size: 1.35rem;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
+        .split-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+            gap: 20px;
+            min-height: calc(100vh - 120px);
+            align-items: stretch;
         }
 
-        .subtitle {
-            margin: 0 0 12px;
-            color: #4b4b4b;
-        }
-
-        .controls {
-            margin: 0 0 10px;
-            font-size: 0.95rem;
-            color: #3f3f3f;
-        }
-
-        .plan {
-            width: 100%;
-            aspect-ratio: 3 / 2;
-            background: var(--paper);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--tertiary-color);
+            border-radius: 16px;
             overflow: hidden;
-            position: relative;
         }
 
-        .plan svg {
+        .plan-panel {
+            background: #d9d9d9;
+            border-color: rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+        }
+
+        .plan-wrap {
+            position: relative;
+            width: 100%;
+            max-width: none;
+            aspect-ratio: 4 / 3;
+            overflow: hidden;
+        }
+
+        .plan-stage {
+            position: absolute;
+            inset: 0;
+            transform-origin: top left;
+            transform: translate(var(--plan-pan-x, 0%), var(--plan-pan-y, 0%)) scale(var(--plan-zoom, 1));
+            transition: transform 0.28s ease;
+        }
+
+        .compass {
+            position: absolute;
+            right: 14px;
+            bottom: 14px;
+            width: 112px;
+            height: 112px;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        .compass svg {
             width: 100%;
             height: 100%;
             display: block;
         }
 
-        .ref-layer {
-            opacity: 0;
-            transition: opacity 0.2s ease;
+        .plan-base {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .plan-clear {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+        }
+
+        .room-button {
+            position: absolute;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            transition: transform 0.18s ease;
+            transform-origin: center;
+            text-decoration: none;
+        }
+
+        body:not(.room-selected) .room-button:hover,
+        body:not(.room-selected) .room-button:focus-visible {
+            transform: scale(1.05);
+            outline: none;
+            z-index: 2;
+        }
+
+        .room-slice {
+            width: 100%;
+            height: 100%;
+            display: block;
             pointer-events: none;
         }
 
-        #show-ref:checked ~ .plan .ref-layer {
-            opacity: 0.55;
+        .room-label {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(1.5rem, 2.2vw, 2.25rem);
+            font-weight: 500;
+            color: #111;
+            pointer-events: none;
         }
 
-        .wall-stroke {
-            stroke: var(--wall);
-            stroke-width: 4;
-            fill: none;
-            stroke-linecap: square;
-            stroke-linejoin: miter;
+        body.room-selected .room-label {
+            color: transparent;
         }
 
-        .detail-stroke {
-            stroke: #8f8f8f;
-            stroke-width: 1.4;
-            fill: none;
+        .room-110a .room-label,
+        .room-110b .room-label,
+        .room-110c .room-label {
+            font-size: clamp(1.1rem, 1.8vw, 1.75rem);
         }
 
-        .h-box {
-            fill: var(--paper);
-            stroke: var(--wall);
-            stroke-width: 3;
+        .room-110 {
+            left: 24.12%;
+            top: 10.94%;
+            width: 46.97%;
+            height: 67.45%;
         }
 
-        .h-text {
-            fill: #202020;
-            font-size: 18px;
-            font-weight: 700;
-            text-anchor: middle;
-            dominant-baseline: middle;
-            font-family: "Segoe UI", Tahoma, sans-serif;
+        .room-110a {
+            left: 13.28%;
+            top: 27.34%;
+            width: 10.84%;
+            height: 36.72%;
         }
 
-        .room-text {
-            fill: #1f1f1f;
-            font-size: 30px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            text-anchor: middle;
-            dominant-baseline: middle;
-            font-family: "Segoe UI", Tahoma, sans-serif;
+        .room-110b {
+            left: 71.09%;
+            top: 26.43%;
+            width: 12.01%;
+            height: 31.77%;
+        }
+
+        .room-110c {
+            left: 71.09%;
+            top: 10.94%;
+            width: 18.36%;
+            height: 13.80%;
+        }
+
+        .db-panel {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .table-header {
+            padding: 1.1rem 1.2rem;
+            border-bottom: 1px solid var(--tertiary-color);
+        }
+
+        .table-header h1 {
+            margin: 0;
+            color: var(--primary-color);
+            font-size: 1.35rem;
+        }
+
+        .table-header p {
+            margin: 0.25rem 0 0;
+            color: var(--tertiary-light);
+        }
+
+        .filter-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 0.75rem;
+        }
+
+        .filter-chip {
+            display: inline-block;
+            padding: 0.3rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(112, 255, 167, 0.14);
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+        }
+
+        .clear-filter {
+            color: var(--secondary-color);
+            text-decoration: none;
+            font-size: 0.92rem;
+        }
+
+        .table-scroll {
+            overflow: auto;
+            min-height: 0;
+            flex: 1;
+        }
+
+        .inventory-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .inventory-table th,
+        .inventory-table td {
+            padding: 0.8rem 0.9rem;
+            border-bottom: 1px solid var(--tertiary-color);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .inventory-table th {
+            position: sticky;
+            top: 0;
+            background: rgba(40, 40, 40, 0.95);
+            color: var(--secondary-color);
+            white-space: nowrap;
+        }
+
+        .inventory-table td {
+            color: var(--light-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--tertiary-light);
+            padding: 1.2rem;
         }
 
         @media (max-width: 900px) {
             .navbar-brand { font-size: 1.4rem; }
-            .navbar-nav { gap: 12px; }
-            .nav-link { font-size: 0.95rem; }
-            .title { font-size: 1.1rem; }
-            .room-text { font-size: 20px; }
+            .navbar-nav { height: auto; }
+            .nav-item {
+                margin: 0 10px;
+                font-size: 1rem;
+            }
+            .split-layout {
+                grid-template-columns: 1fr;
+            }
+            .plan-panel {
+                padding: 6px;
+            }
+            .db-panel {
+                min-height: 420px;
+            }
+            .plan-stage {
+                transform: translate(var(--plan-pan-x-mobile, var(--plan-pan-x, 0%)), var(--plan-pan-y-mobile, var(--plan-pan-y, 0%))) scale(var(--plan-zoom-mobile, var(--plan-zoom, 1)));
+            }
         }
     </style>
 </head>
-<body>
+<body{% if selected_room %} class="room-selected"{% endif %}>
     <nav class="navbar">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">BME Inventory</a>
             <ul class="navbar-nav">
-                <li><a class="nav-link" href="/">Search</a></li>
-                <li><a class="nav-link" href="/db">Database</a></li>
-                <li><a class="nav-link" href="/edit">Editor</a></li>
-                <li><a class="nav-link active" href="/floorplan">Floorplan</a></li>
+                <li class="nav-item"><a class="nav-link" href="/">Search</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/floorplan">Floorplan</a></li>
+                <li class="nav-item"><a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a></li>
             </ul>
         </div>
     </nav>
 
     <main class="page">
-        <h1 class="title">BME Floor Plan (Toilet Rooms Removed)</h1>
-        <p class="subtitle">Restarted trace with room walls and H cutouts aligned to the uploaded plan.</p>
+        <div class="split-layout">
+            <section class="panel plan-panel">
+                <div class="plan-wrap">
+                    <div class="plan-stage" id="plan-stage">
+                        <a class="plan-clear" href="{{ url_for('floorplan') }}" aria-label="Clear room filter"></a>
+                        <img
+                            class="plan-base"
+                            src="{{ url_for('static', filename='floorplan-base-colored.png') }}"
+                            alt="Floorplan for rooms 110, 110A, 110B, and 110C"
+                        >
+                        <a class="room-button room-110{% if selected_room == '110' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110') }}{% endif %}" aria-label="Room 110" title="Room 110" data-room-button>
+                            <img class="room-slice" src="{{ url_for('static', filename='room-110-fill-colored.png') }}" alt="">
+                            <span class="room-label">110</span>
+                        </a>
+                        <a class="room-button room-110a{% if selected_room == '110A' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110A') }}{% endif %}" aria-label="Room 110A" title="Room 110A" data-room-button>
+                            <img class="room-slice" src="{{ url_for('static', filename='room-110a-fill-colored.png') }}" alt="">
+                            <span class="room-label">110A</span>
+                        </a>
+                        <a class="room-button room-110b{% if selected_room == '110B' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110B') }}{% endif %}" aria-label="Room 110B" title="Room 110B" data-room-button>
+                            <img class="room-slice" src="{{ url_for('static', filename='room-110b-fill-colored.png') }}" alt="">
+                            <span class="room-label">110B</span>
+                        </a>
+                        <a class="room-button room-110c{% if selected_room == '110C' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110C') }}{% endif %}" aria-label="Room 110C" title="Room 110C" data-room-button>
+                            <img class="room-slice" src="{{ url_for('static', filename='room-110c-fill-colored.png') }}" alt="">
+                            <span class="room-label">110C</span>
+                        </a>
+                    </div>
+                    <div class="compass" aria-hidden="true">
+                        <svg viewBox="0 0 100 100" role="img">
+                            <path d="M60.6 20.8 A31 31 0 0 1 79.2 39.4" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M79.2 60.6 A31 31 0 0 1 60.6 79.2" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M39.4 79.2 A31 31 0 0 1 20.8 60.6" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M20.8 39.4 A31 31 0 0 1 39.4 20.8" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M57.9 28.4 A23 23 0 0 1 71.6 42.1" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M71.6 57.9 A23 23 0 0 1 57.9 71.6" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M42.1 71.6 A23 23 0 0 1 28.4 57.9" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <path d="M28.4 42.1 A23 23 0 0 1 42.1 28.4" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round" />
+                            <g fill="#111" stroke="#111" stroke-linejoin="round">
+                                <polygon points="50,12 45,38 50,47 55,38" />
+                                <polygon points="50,88 45,62 50,53 55,62" />
+                                <polygon points="12,50 38,45 47,50 38,55" />
+                            </g>
+                            <polygon points="88,50 62,45 53,50 62,55" fill="#d62828" stroke="none" />
+                            <polygon points="53,50 62,45 62,55" fill="#d62828" stroke="none" />
+                            <g fill="#ffffff" stroke="#111" stroke-width="2.5" stroke-linejoin="round">
+                                <polygon points="50,18 49,47 44,40" />
+                                <polygon points="50,82 49,53 44,60" />
+                                <polygon points="18,50 47,49 40,44" />
+                            </g>
+                            <polygon points="82,50 62,45.5 62,54.5 53,50" fill="#d62828" stroke="none" />
+                            <circle cx="50" cy="50" r="3.5" fill="#111" />
+                            <text x="50" y="10" text-anchor="middle" font-size="10" font-weight="800" fill="#111">W</text>
+                            <text x="92" y="54" text-anchor="middle" font-size="10" font-weight="800" fill="#111">N</text>
+                            <text x="50" y="98" text-anchor="middle" font-size="10" font-weight="800" fill="#111">E</text>
+                            <text x="8" y="54" text-anchor="middle" font-size="10" font-weight="800" fill="#111">S</text>
+                        </svg>
+                    </div>
+                </div>
+            </section>
 
-        <input id="show-ref" type="checkbox">
-        <label class="controls" for="show-ref">Show reference overlay for verification</label>
-
-        <section class="plan" aria-label="Recreated floor plan">
-            <svg viewBox="0 0 1152 768" role="img" aria-label="Room layout for 110, 110A, 110B, and 110C">
-                <image class="ref-layer" href="{{ url_for('static', filename='floorplan-reference.png') }}" x="0" y="0" width="1152" height="768" />
-
-                <!-- top main wall segmented around H box and center post -->
-                <path class="wall-stroke" d="M102 86 L178 86" />
-                <path class="wall-stroke" d="M202 86 L478 86" />
-                <path class="wall-stroke" d="M494 86 L628 86" />
-                <path class="wall-stroke" d="M742 86 L778 86" />
-                <path class="wall-stroke" d="M782 86 L1005 86" />
-
-                <!-- center post on top wall -->
-                <rect x="478" y="86" width="16" height="48" class="wall-stroke" />
-
-                <!-- 110A room walls -->
-                <path class="wall-stroke" d="M67 220 L67 609" />
-                <path class="wall-stroke" d="M67 244 L196 244" />
-                <path class="wall-stroke" d="M196 220 L196 244" />
-                <path class="wall-stroke" d="M196 266 L196 583" />
-                <path class="wall-stroke" d="M67 583 L196 583" />
-
-                <!-- 110 / 110A shared wall with cutout -->
-                <path class="wall-stroke" d="M194 86 L194 401" />
-                <path class="wall-stroke" d="M194 437 L194 583" />
-
-                <!-- 110C room walls -->
-                <path class="wall-stroke" d="M742 86 L1004 86" />
-                <path class="wall-stroke" d="M1004 86 L1004 226" />
-                <path class="wall-stroke" d="M742 226 L1004 226" />
-                <path class="wall-stroke" d="M742 132 L742 162" />
-                <path class="wall-stroke" d="M742 186 L742 226" />
-                <path class="wall-stroke" d="M742 162 L780 162" />
-                <path class="wall-stroke" d="M780 132 L780 162" />
-
-                <!-- 110 / 110B / 110C shared wall with two cutouts -->
-                <path class="wall-stroke" d="M824 226 L824 510" />
-                <path class="wall-stroke" d="M824 546 L824 653" />
-
-                <!-- 110B room walls (toilets omitted) -->
-                <path class="wall-stroke" d="M824 226 L995 226" />
-                <path class="wall-stroke" d="M995 226 L995 542" />
-                <path class="wall-stroke" d="M824 542 L995 542" />
-                <path class="wall-stroke" d="M824 542 L824 653" />
-                <path class="wall-stroke" d="M824 653 L780 653" />
-                <path class="wall-stroke" d="M780 653 L780 717" />
-                <path class="wall-stroke" d="M780 717 L834 717" />
-
-                <!-- 110 bottom boundary with openings -->
-                <path class="wall-stroke" d="M194 684 L304 684" />
-                <path class="wall-stroke" d="M360 684 L600 684" />
-                <path class="wall-stroke" d="M675 684 L780 684" />
-                <path class="wall-stroke" d="M304 684 L304 717" />
-                <path class="wall-stroke" d="M360 684 L360 717" />
-                <path class="wall-stroke" d="M600 684 L600 717" />
-                <path class="wall-stroke" d="M675 684 L675 717" />
-
-                <!-- H cutout boxes -->
-                <rect x="178" y="86" width="24" height="44" class="h-box" />
-                <text x="190" y="108" class="h-text">H</text>
-
-                <rect x="182" y="401" width="24" height="36" class="h-box" />
-                <text x="194" y="419" class="h-text">H</text>
-
-                <rect x="730" y="132" width="24" height="36" class="h-box" />
-                <text x="742" y="150" class="h-text">H</text>
-
-                <rect x="812" y="510" width="24" height="36" class="h-box" />
-                <text x="824" y="528" class="h-text">H</text>
-
-                <rect x="780" y="681" width="24" height="36" class="h-box" />
-                <text x="792" y="699" class="h-text">H</text>
-
-                <!-- door swing hints -->
-                <path class="detail-stroke" d="M196 266 A40 40 0 0 1 156 226" />
-                <path class="detail-stroke" d="M742 186 A48 48 0 0 1 790 234" />
-                <path class="detail-stroke" d="M824 510 A44 44 0 0 0 868 554" />
-                <path class="detail-stroke" d="M304 717 A30 30 0 0 0 334 687" />
-                <path class="detail-stroke" d="M675 717 A30 30 0 0 0 705 687" />
-
-                <!-- labels -->
-                <text class="room-text" x="510" y="420">110</text>
-                <text class="room-text" x="128" y="430">110A</text>
-                <text class="room-text" x="905" y="390">110B</text>
-                <text class="room-text" x="872" y="154">110C</text>
-            </svg>
-        </section>
+            <section class="panel db-panel">
+                <div class="table-header">
+                    <h1>Inventory Items</h1>
+                    <p>Sorted by most recently added.</p>
+                    <div class="filter-row">
+                        <span class="filter-chip">
+                            {% if selected_room %}
+                                Showing room {{ selected_room }}
+                            {% else %}
+                                Showing all rooms
+                            {% endif %}
+                        </span>
+                        {% if selected_room %}
+                            <a class="clear-filter" href="{{ url_for('floorplan') }}">Clear filter</a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table class="inventory-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item Name</th>
+                                <th scope="col">UPC</th>
+                                <th scope="col">Qty</th>
+                                <th scope="col">{% if selected_room %}Wall{% else %}Room{% endif %}</th>
+                                <th scope="col">Last Added</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if items %}
+                                {% for item in items %}
+                                <tr>
+                                    <td>{{ item.Name }}</td>
+                                    <td>{{ item.UPC }}</td>
+                                    <td>{{ item.TotalQty }}</td>
+                                    <td>{{ item.WallNames if item.WallNames else 'Unknown' }}</td>
+                                    <td>{{ item.LastAdded if item.LastAdded else 'No entries yet' }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="empty-state">No items found in the database.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
     </main>
+    <script>
+        (() => {
+            document.querySelectorAll('[data-protected-link]').forEach((link) => {
+                link.addEventListener('click', async (event) => {
+                    if (link.dataset.authenticated === 'true') return;
+                    event.preventDefault();
+                    const password = window.prompt('Enter editor password:');
+                    if (password === null) return;
+                    const response = await fetch(link.dataset.authUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                    if (!response.ok) {
+                        window.alert('Incorrect password.');
+                        return;
+                    }
+                    const result = await response.json();
+                    window.location.href = result.redirect;
+                });
+            });
+
+            const body = document.body;
+            const wrap = document.querySelector('.plan-wrap');
+            const stage = document.getElementById('plan-stage');
+            let isZoomingOut = false;
+
+            function resetPlanZoom() {
+                if (!stage) return;
+                stage.style.setProperty('--plan-zoom', '1');
+                stage.style.setProperty('--plan-pan-x', '0%');
+                stage.style.setProperty('--plan-pan-y', '0%');
+                stage.style.setProperty('--plan-zoom-mobile', '1');
+                stage.style.setProperty('--plan-pan-x-mobile', '0%');
+                stage.style.setProperty('--plan-pan-y-mobile', '0%');
+            }
+
+            if (body.classList.contains('room-selected') && wrap && stage) {
+                wrap.querySelectorAll('a[href]').forEach((link) => {
+                    link.addEventListener('click', (event) => {
+                        const href = link.getAttribute('href');
+                        if (!href || isZoomingOut) return;
+                        event.preventDefault();
+                        isZoomingOut = true;
+                        body.classList.remove('room-selected');
+                        resetPlanZoom();
+                        window.setTimeout(() => {
+                            window.location.href = href;
+                        }, 280);
+                    });
+                });
+            }
+
+            const selectedButton = document.querySelector('.room-button.active-room');
+            if (!selectedButton || !wrap || !stage) return;
+
+            const label = selectedButton.querySelector('.room-label');
+            if (!label) return;
+
+            const wrapRect = wrap.getBoundingClientRect();
+            const labelRect = label.getBoundingClientRect();
+            const roomRect = selectedButton.getBoundingClientRect();
+            const centerX = ((labelRect.left + (labelRect.width / 2)) - wrapRect.left) / wrapRect.width;
+            const centerY = ((labelRect.top + (labelRect.height / 2)) - wrapRect.top) / wrapRect.height;
+            const roomWidthRatio = roomRect.width / wrapRect.width;
+            const roomHeightRatio = roomRect.height / wrapRect.height;
+            const fitPadding = selectedButton.classList.contains('room-110') ? 0.10 : 0.08;
+            const zoomFitX = 1 / (roomWidthRatio + fitPadding);
+            const zoomFitY = 1 / (roomHeightRatio + fitPadding);
+            const zoom = Math.max(1.15, Math.min(zoomFitX, zoomFitY, 1.95));
+            const mobileZoom = Math.max(1.08, Math.min(zoom * 0.82, 1.5));
+            const panX = 50 - (zoom * centerX * 100);
+            const panY = 50 - (zoom * centerY * 100);
+            const mobilePanX = 50 - (mobileZoom * centerX * 100);
+            const mobilePanY = 50 - (mobileZoom * centerY * 100);
+
+            stage.style.setProperty('--plan-zoom', zoom.toFixed(2));
+            stage.style.setProperty('--plan-pan-x', `${panX.toFixed(2)}%`);
+            stage.style.setProperty('--plan-pan-y', `${panY.toFixed(2)}%`);
+            stage.style.setProperty('--plan-zoom-mobile', mobileZoom.toFixed(2));
+            stage.style.setProperty('--plan-pan-x-mobile', `${mobilePanX.toFixed(2)}%`);
+            stage.style.setProperty('--plan-pan-y-mobile', `${mobilePanY.toFixed(2)}%`);
+        })();
+    </script>
 </body>
 </html>

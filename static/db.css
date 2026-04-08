@@ -85,6 +85,87 @@ body {
     color: var(--tertiary-light);
 }
 
+.new-entry-button,
+#save-item-button,
+#newEntryModal .btn-primary {
+    background-color: var(--primary-color);
+    border: none;
+    color: var(--dark-color);
+}
+
+.new-entry-button:hover,
+#save-item-button:hover,
+#newEntryModal .btn-primary:hover {
+    background-color: var(--secondary-color);
+    color: var(--dark-color);
+}
+
+#newEntryModal .modal-content {
+    background: linear-gradient(to bottom, var(--dark-color), #444);
+    color: var(--light-color);
+}
+
+#newEntryModal .modal-header,
+#newEntryModal .modal-footer {
+    border-color: var(--tertiary-color);
+}
+
+#newEntryModal .modal-title {
+    color: var(--primary-color);
+}
+
+#newEntryModal label {
+    color: var(--secondary-color);
+}
+
+#newEntryModal .form-control,
+#newEntryModal .form-select {
+    background-color: var(--tertiary-light);
+    border: 1px solid var(--secondary-color);
+    color: var(--dark-color);
+}
+
+#newEntryModal .form-control::placeholder {
+    color: rgba(60, 60, 60, 0.8);
+}
+
+#newEntryModal .dropdown-results {
+    background: var(--light-color);
+    color: var(--primary-dark);
+    border: 1px solid var(--secondary-color);
+    border-top: none;
+    border-radius: 0 0 5px 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+    display: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#newEntryModal .result-item {
+    padding: 10px;
+    border-bottom: 1px solid var(--tertiary-light);
+    cursor: pointer;
+    color: var(--dark-color);
+    background-color: var(--light-color);
+}
+
+#newEntryModal .result-item:last-child {
+    border-bottom: none;
+}
+
+#newEntryModal .result-item:hover,
+#newEntryModal .result-item.highlighted {
+    background: var(--secondary-color);
+    color: var(--dark-color);
+}
+
+#newEntryModal .no-results {
+    padding: 10px;
+    text-align: center;
+    color: var(--dark-color);
+}
+
 .inventory-table thead th {
     color: var(--secondary-color);
     border-bottom-color: var(--tertiary-color);
@@ -93,6 +174,10 @@ body {
 
 .inventory-table td {
     border-bottom-color: var(--tertiary-color);
+}
+
+.edit-item-button {
+    white-space: nowrap;
 }
 
 .empty-state {

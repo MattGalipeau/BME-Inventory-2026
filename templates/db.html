@@ -19,13 +19,10 @@
                         <a class="nav-link" href="/">Search</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="/db">Database</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/edit">Editor</a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link" href="/floorplan">Floorplan</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a>
                     </li>
                 </ul>
             </div>
@@ -37,33 +34,63 @@
             <div class="table-header">
                 <h1>Inventory Items</h1>
                 <p>Sorted by most recently added.</p>
+                <button type="button" class="btn new-entry-button mt-3" data-bs-toggle="modal" data-bs-target="#newEntryModal">
+                    New Item Entry
+                </button>
             </div>
 
             <div class="table-responsive">
                 <table class="table table-dark table-hover mb-0 align-middle inventory-table">
                     <thead>
                         <tr>
+                            <th scope="col">Entry</th>
                             <th scope="col">Item Name</th>
                             <th scope="col">UPC</th>
-                            <th scope="col">Total Quantity</th>
-                            <th scope="col">Locations</th>
-                            <th scope="col">Last Added</th>
+                            <th scope="col">Qty</th>
+                            <th scope="col">Room</th>
+                            <th scope="col">Wall</th>
+                            <th scope="col">Storage</th>
+                            <th scope="col">Bin</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Time</th>
+                            <th scope="col">Edit</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% if items %}
-                            {% for item in items %}
+                        {% if entries %}
+                            {% for entry in entries %}
                             <tr>
-                                <td>{{ item.Name }}</td>
-                                <td>{{ item.UPC }}</td>
-                                <td>{{ item.TotalQty }}</td>
-                                <td>{{ item.LocationCount }}</td>
-                                <td>{{ item.LastAdded if item.LastAdded else 'No entries yet' }}</td>
+                                <td>{{ entry.EntryID }}</td>
+                                <td>{{ entry.Name }}</td>
+                                <td>{{ entry.UPC }}</td>
+                                <td>{{ entry.Qty }}</td>
+                                <td>{{ entry.RoomName if entry.RoomName else 'Unknown' }}</td>
+                                <td>{{ entry.WallName if entry.WallName else 'Unknown' }}</td>
+                                <td>{{ entry.BinType if entry.BinType else 'Unknown' }}</td>
+                                <td>{{ entry.BinID if entry.BinID else 'Unknown' }}</td>
+                                <td>{{ entry.Date if entry.Date else 'Unknown' }}</td>
+                                <td>{{ entry.Time if entry.Time else 'Unknown' }}</td>
+                                <td>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-light edit-item-button"
+                                        data-entry-id="{{ entry.EntryID }}"
+                                        data-item-upc="{{ entry.UPC }}"
+                                        data-item-name="{{ entry.Name }}"
+                                        data-item-qty="{{ entry.Qty }}"
+                                        data-room="{{ entry.RoomName if entry.RoomName else '' }}"
+                                        data-wall="{{ entry.WallName if entry.WallName else '' }}"
+                                        data-storage-type="{{ entry.BinType if entry.BinType else '' }}"
+                                        data-bin-id="{{ entry.BinID if entry.BinID else '' }}"
+                                    >
+                                        Edit
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" class="empty-state">No items found in the database.</td>
+                                <td colspan="11" class="empty-state">No items found in the database.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -72,9 +99,288 @@
         </section>
     </main>
 
+    <div class="modal fade" id="editItemModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">Edit Item</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="edit-item-error" class="alert alert-danger d-none mb-3"></div>
+                    <form id="edit-item-form">
+                        <input type="hidden" id="edit-entry-id">
+                        <div class="mb-3">
+                            <label class="form-label" for="edit-item-name">Item Name</label>
+                            <input class="form-control" id="edit-item-name" type="text" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="edit-item-upc">UPC</label>
+                            <input class="form-control" id="edit-item-upc" type="number" readonly>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="edit-item-qty">Quantity</label>
+                            <input class="form-control" id="edit-item-qty" type="number" min="0" required>
+                        </div>
+                        <div class="row mt-3 g-2">
+                            <div class="col-md-6">
+                                <label class="form-label" for="edit-room">Room</label>
+                                <select class="form-select" id="edit-room" required>
+                                    <option value="">--Select Room--</option>
+                                    <option value="110">110 Main</option>
+                                    <option value="110A">110-A</option>
+                                    <option value="110B">110-B</option>
+                                    <option value="110C">110-C</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="edit-wall">Wall</label>
+                                <select class="form-select" id="edit-wall" required>
+                                    <option value="">--Select Wall--</option>
+                                    <option value="North">North</option>
+                                    <option value="South">South</option>
+                                    <option value="East">East</option>
+                                    <option value="West">West</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3 g-2">
+                            <div class="col-md-6">
+                                <label class="form-label" for="edit-storage-type">Storage Type</label>
+                                <select class="form-select" id="edit-storage-type" required>
+                                    <option value="">--Storage Type--</option>
+                                    <option value="Bin">Bin</option>
+                                    <option value="Shelf">Shelf</option>
+                                    <option value="Drawer">Drawer</option>
+                                    <option value="Cabinet">Cabinet</option>
+                                    <option value="Tabletop">Tabletop</option>
+                                    <option value="Overhead">Overhead</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="edit-bin-number">Bin Number</label>
+                                <select class="form-select" id="edit-bin-number" required>
+                                    <option value="">--Select Bin--</option>
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-item-button">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="newEntryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">New Item Entry</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-form">
+                        <div class="selector">
+                            <select name="rooms" id="rooms">
+                                <option value="">--Select Room--</option>
+                                <option value="110">110 Main</option>
+                                <option value="110A">110-A</option>
+                                <option value="110B">110-B</option>
+                                <option value="110C">110-C</option>
+                            </select>
+                            <select name="walls" id="walls">
+                                <option value="">--Select Wall--</option>
+                                <option value="North">North</option>
+                                <option value="South">South</option>
+                                <option value="East">East</option>
+                                <option value="West">West</option>
+                            </select>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col">
+                                <label for="bin-type">Storage Type:</label>
+                                <select name="bin-type" id="bin-type" class="form-select">
+                                    <option value="">--Storage Type--</option>
+                                    <option value="Bin">Bin</option>
+                                    <option value="Shelf">Shelf</option>
+                                    <option value="Drawer">Drawer</option>
+                                    <option value="Cabinet">Cabinet</option>
+                                    <option value="Tabletop">Tabletop</option>
+                                    <option value="Overhead">Overhead</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col">
+                                <label for="bin">Bin Number:</label>
+                                <select name="bin" id="bin" class="form-select" disabled>
+                                    <option value="">--Select Bin--</option>
+                                    <option value="CREATE">Create New Bin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-3">
+                            <div class="col search-container">
+                                <label for="item_name">Item Name:</label>
+                                <input
+                                    type="text"
+                                    id="item_name"
+                                    class="form-control"
+                                    name="item_name"
+                                    placeholder="Search or create an item..."
+                                    autocomplete="off">
+                                <div class="dropdown-results" id="dropdown-results"></div>
+                            </div>
+                            <div class="col">
+                                <label for="quantity">Quantity:</label>
+                                <input
+                                    type="number"
+                                    id="quantity"
+                                    class="form-control"
+                                    name="quantity"
+                                    placeholder="Item Quantity"
+                                    min="0"
+                                    required>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitForm()">Add Item</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.3/dist/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{url_for('static', filename='edit.js')}}"></script>
+    <script>
+        (() => {
+            const modalElement = document.getElementById('editItemModal');
+            const editModal = new bootstrap.Modal(modalElement);
+            const newEntryModalElement = document.getElementById('newEntryModal');
+            const newEntryModal = new bootstrap.Modal(newEntryModalElement);
+            const errorBox = document.getElementById('edit-item-error');
+            const entryIdInput = document.getElementById('edit-entry-id');
+            const nameInput = document.getElementById('edit-item-name');
+            const upcInput = document.getElementById('edit-item-upc');
+            const qtyInput = document.getElementById('edit-item-qty');
+            const roomInput = document.getElementById('edit-room');
+            const wallInput = document.getElementById('edit-wall');
+            const storageTypeInput = document.getElementById('edit-storage-type');
+            const binNumberInput = document.getElementById('edit-bin-number');
+            const saveButton = document.getElementById('save-item-button');
+
+            async function loadBinOptions(selectedBin = '') {
+                if (!roomInput.value || !wallInput.value || !storageTypeInput.value) {
+                    binNumberInput.innerHTML = '<option value="">--Select Bin--</option>';
+                    return;
+                }
+
+                const response = await fetch('{{ url_for("get_bins") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room: roomInput.value,
+                        wall: wallInput.value,
+                        storageType: storageTypeInput.value
+                    })
+                });
+                const bins = response.ok ? await response.json() : [];
+                binNumberInput.innerHTML = '<option value="">--Select Bin--</option>';
+                bins.forEach((bin) => {
+                    const option = document.createElement('option');
+                    option.value = String(bin.id);
+                    option.textContent = String(bin.id);
+                    if (String(bin.id) === String(selectedBin)) {
+                        option.selected = true;
+                    }
+                    binNumberInput.appendChild(option);
+                });
+            }
+
+            document.querySelectorAll('[data-protected-link]').forEach((link) => {
+                link.addEventListener('click', async (event) => {
+                    if (link.dataset.authenticated === 'true') return;
+                    event.preventDefault();
+                    const password = window.prompt('Enter editor password:');
+                    if (password === null) return;
+                    const response = await fetch(link.dataset.authUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                    if (!response.ok) {
+                        window.alert('Incorrect password.');
+                        return;
+                    }
+                    const result = await response.json();
+                    window.location.href = result.redirect;
+                });
+            });
+
+            document.querySelectorAll('.edit-item-button').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    errorBox.classList.add('d-none');
+                    errorBox.textContent = '';
+                    entryIdInput.value = button.dataset.entryId;
+                    nameInput.value = button.dataset.itemName;
+                    upcInput.value = button.dataset.itemUpc;
+                    qtyInput.value = button.dataset.itemQty;
+                    roomInput.value = button.dataset.room;
+                    wallInput.value = button.dataset.wall;
+                    storageTypeInput.value = button.dataset.storageType;
+                    await loadBinOptions(button.dataset.binId);
+                    editModal.show();
+                });
+            });
+
+            [roomInput, wallInput, storageTypeInput].forEach((input) => {
+                input.addEventListener('change', () => loadBinOptions());
+            });
+
+            saveButton.addEventListener('click', async () => {
+                errorBox.classList.add('d-none');
+                errorBox.textContent = '';
+
+                const payload = {
+                    entry_id: entryIdInput.value,
+                    name: nameInput.value,
+                    qty: qtyInput.value,
+                    room: roomInput.value,
+                    wall: wallInput.value,
+                    storage_type: storageTypeInput.value,
+                    bin_number: binNumberInput.value
+                };
+
+                const response = await fetch('{{ url_for("update_entry") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const result = await response.json().catch(() => ({ error: 'Failed to update item.' }));
+                    errorBox.textContent = result.error || 'Failed to update item.';
+                    errorBox.classList.remove('d-none');
+                    return;
+                }
+
+                window.location.reload();
+            });
+
+            const originalSubmitForm = window.submitForm;
+            window.submitForm = async function submitAndRefresh() {
+                await originalSubmitForm();
+                newEntryModal.hide();
+                window.location.reload();
+            };
+        })();
+    </script>
 </body>
 </html>

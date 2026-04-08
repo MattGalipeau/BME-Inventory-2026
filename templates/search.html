@@ -18,13 +18,10 @@
                       <a class="nav-link active" href="/">Search</a>
                   </li>
                   <li class="nav-item">
-                      <a class="nav-link" href="/db">Database</a>
-                  </li>
-                  <li class="nav-item">
-                      <a class="nav-link" href="/edit">Editor</a>
-                  </li>
-                  <li class="nav-item">
                       <a class="nav-link" href="/floorplan">Floorplan</a>
+                  </li>
+                  <li class="nav-item">
+                      <a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a>
                   </li>
               </ul>
           </div>
@@ -78,5 +75,28 @@
 </div>
 
     <script src="{{url_for('static', filename='search.js')}}"></script>
+    <script>
+        (() => {
+            document.querySelectorAll('[data-protected-link]').forEach((link) => {
+                link.addEventListener('click', async (event) => {
+                    if (link.dataset.authenticated === 'true') return;
+                    event.preventDefault();
+                    const password = window.prompt('Enter editor password:');
+                    if (password === null) return;
+                    const response = await fetch(link.dataset.authUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                    if (!response.ok) {
+                        window.alert('Incorrect password.');
+                        return;
+                    }
+                    const result = await response.json();
+                    window.location.href = result.redirect;
+                });
+            });
+        })();
+    </script>
 </body>
 </html>
