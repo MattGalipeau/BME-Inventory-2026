@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='db.css') }}">
+    <title>BME Inventory Bins</title>
+</head>
+<body>
+    <nav class="navbar navbar-light bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">BME Inventory</a>
+            <div class="ms-auto">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Search</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/floorplan">Floorplan</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/bins">Bins</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="db-wrapper">
+        <section class="table-card">
+            <div class="table-header">
+                <h1>Bin Directory</h1>
+                <p>All existing bins with storage type and identifier values.</p>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle inventory-table" id="bins-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">
+                                <button type="button" class="sort-button" data-sort-key="room">
+                                    Room
+                                </button>
+                            </th>
+                            <th scope="col">Wall</th>
+                            <th scope="col">
+                                <button type="button" class="sort-button" data-sort-key="storage">
+                                    Storage Type
+                                </button>
+                            </th>
+                            <th scope="col">
+                                <button type="button" class="sort-button" data-sort-key="bin">
+                                    Bin Number
+                                </button>
+                            </th>
+                            <th scope="col">
+                                <button type="button" class="sort-button" data-sort-key="identifier">
+                                    Identifier
+                                </button>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="bins-table-body">
+                        {% if bins %}
+                            {% for bin in bins %}
+                            <tr
+                                data-room="{{ bin.RoomName if bin.RoomName else 'Unknown' }}"
+                                data-wall="{{ bin.WallName if bin.WallName else 'Unknown' }}"
+                                data-storage="{{ bin.BinType if bin.BinType else 'Unknown' }}"
+                                data-bin="{{ bin.BinID if bin.BinID is not none else '' }}"
+                                data-identifier="{{ bin.BinUPC if bin.BinUPC else '' }}"
+                            >
+                                <td>{{ bin.RoomName if bin.RoomName else 'Unknown' }}</td>
+                                <td>{{ bin.WallName if bin.WallName else 'Unknown' }}</td>
+                                <td>{{ bin.BinType if bin.BinType else 'Unknown' }}</td>
+                                <td>{{ bin.BinID if bin.BinID is not none else 'Unknown' }}</td>
+                                <td>{{ bin.BinUPC if bin.BinUPC else 'Unknown' }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="empty-state">No bins found in the database.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        (() => {
+            document.querySelectorAll('[data-protected-link]').forEach((link) => {
+                link.addEventListener('click', async (event) => {
+                    if (link.dataset.authenticated === 'true') return;
+                    event.preventDefault();
+                    const password = window.prompt('Enter editor password:');
+                    if (password === null) return;
+                    const response = await fetch(link.dataset.authUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    });
+                    if (!response.ok) {
+                        window.alert('Incorrect password.');
+                        return;
+                    }
+                    const result = await response.json();
+                    window.location.href = result.redirect;
+                });
+            });
+
+            const tableBody = document.getElementById('bins-table-body');
+            const sortButtons = document.querySelectorAll('.sort-button');
+            const sortState = {
+                key: 'room',
+                direction: 'asc'
+            };
+
+            const normalizeText = (value) => (value || '').toString().trim().toLowerCase();
+            const normalizeNumber = (value) => {
+                const parsed = Number(value);
+                return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+            };
+
+            const compareRows = (a, b, key) => {
+                if (key === 'bin') {
+                    return normalizeNumber(a.dataset.bin) - normalizeNumber(b.dataset.bin);
+                }
+
+                if (key === 'storage') {
+                    const storageCompare = normalizeText(a.dataset.storage).localeCompare(normalizeText(b.dataset.storage));
+                    if (storageCompare !== 0) return storageCompare;
+                    return normalizeNumber(a.dataset.bin) - normalizeNumber(b.dataset.bin);
+                }
+
+                return normalizeText(a.dataset[key]).localeCompare(normalizeText(b.dataset[key]));
+            };
+
+            const renderSortIndicators = () => {
+                sortButtons.forEach((button) => {
+                    const isActive = button.dataset.sortKey === sortState.key;
+                    button.dataset.direction = isActive ? sortState.direction : '';
+                });
+            };
+
+            const sortRows = (key, direction) => {
+                const rows = Array.from(tableBody.querySelectorAll('tr'));
+                rows.sort((a, b) => {
+                    const comparison = compareRows(a, b, key);
+                    return direction === 'asc' ? comparison : -comparison;
+                });
+                rows.forEach((row) => tableBody.appendChild(row));
+            };
+
+            sortButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const key = button.dataset.sortKey;
+                    const nextDirection =
+                        sortState.key === key && sortState.direction === 'asc' ? 'desc' : 'asc';
+
+                    sortState.key = key;
+                    sortState.direction = nextDirection;
+                    sortRows(key, nextDirection);
+                    renderSortIndicators();
+                });
+            });
+
+            if (tableBody) {
+                sortRows(sortState.key, sortState.direction);
+                renderSortIndicators();
+            }
+        })();
+    </script>
+</body>
+</html>

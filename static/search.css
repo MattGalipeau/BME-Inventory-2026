@@ -283,3 +283,180 @@ p{
     margin: 20px 0;
     font-size: 0.9rem;
 }
+
+.helpbot {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1400;
+}
+
+.helpbot-launcher {
+    border: none;
+    border-radius: 999px;
+    background: var(--primary-color);
+    color: var(--dark-color);
+    font-weight: 700;
+    padding: 0.9rem 1.25rem;
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.28);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.helpbot-launcher:hover {
+    background: var(--secondary-color);
+    transform: translateY(-2px);
+}
+
+.helpbot-panel {
+    width: min(360px, calc(100vw - 32px));
+    height: min(520px, calc(100vh - 120px));
+    margin-top: 0.75rem;
+    background: rgba(37, 37, 37, 0.96);
+    border: 1px solid var(--tertiary-color);
+    border-radius: 20px;
+    box-shadow: 0 22px 45px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.helpbot-panel.hidden {
+    display: none;
+}
+
+.helpbot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1rem 0.8rem;
+    border-bottom: 1px solid var(--tertiary-color);
+    background: linear-gradient(to bottom, rgba(112, 255, 167, 0.15), transparent);
+}
+
+.helpbot-header h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--primary-color);
+}
+
+.helpbot-header p {
+    margin: 0.2rem 0 0;
+    color: var(--tertiary-light);
+    font-size: 0.9rem;
+}
+
+.helpbot-close {
+    border: none;
+    background: transparent;
+    color: var(--light-color);
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.helpbot-messages {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.helpbot-message {
+    max-width: 88%;
+    padding: 0.8rem 0.95rem;
+    border-radius: 16px;
+    line-height: 1.45;
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+}
+
+.helpbot-message.bot {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--light-color);
+}
+
+.helpbot-message.user {
+    align-self: flex-end;
+    background: var(--primary-color);
+    color: var(--dark-color);
+}
+
+.helpbot-sources {
+    margin-top: 0.65rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.helpbot-sources-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.helpbot-sources a {
+    color: var(--secondary-color);
+    text-decoration: none;
+    font-size: 0.88rem;
+}
+
+.helpbot-sources a:hover {
+    text-decoration: underline;
+}
+
+.helpbot-form {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-top: 1px solid var(--tertiary-color);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.helpbot-input {
+    position: static;
+    width: auto;
+    height: auto;
+    flex: 1;
+    border: 1px solid var(--tertiary-color);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--light-color);
+    padding: 0.85rem 0.95rem;
+}
+
+.helpbot-input::placeholder {
+    color: var(--tertiary-light);
+}
+
+.helpbot-send {
+    border: none;
+    border-radius: 14px;
+    background: var(--primary-color);
+    color: var(--dark-color);
+    padding: 0.85rem 1rem;
+    font-weight: 700;
+}
+
+.helpbot-send:hover {
+    background: var(--secondary-color);
+}
+
+@media (max-width: 768px) {
+    .helpbot {
+        right: 12px;
+        bottom: 12px;
+    }
+
+    .helpbot-panel {
+        width: min(360px, calc(100vw - 24px));
+        height: min(480px, calc(100vh - 100px));
+    }
+}

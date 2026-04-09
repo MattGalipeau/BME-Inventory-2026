@@ -70,4 +70,120 @@ document.addEventListener('DOMContentLoaded', () => {
           modal.style.display = 'none';
       }
   });
+
+  const helpbotLauncher = document.getElementById('helpbot-launcher');
+  const helpbotClose = document.getElementById('helpbot-close');
+  const helpbotPanel = document.getElementById('helpbot-panel');
+  const helpbotForm = document.getElementById('helpbot-form');
+  const helpbotInput = document.getElementById('helpbot-input');
+  const helpbotMessages = document.getElementById('helpbot-messages');
+  const helpbotHistory = [
+      {
+          role: 'assistant',
+          content: 'I can help locate items, summarize quantities, tell you what is in a room, and suggest which inventory items fit a task like 3D printing.'
+      }
+  ];
+
+  function setHelpbotOpen(isOpen) {
+      helpbotPanel.classList.toggle('hidden', !isOpen);
+      helpbotLauncher.setAttribute('aria-expanded', String(isOpen));
+      if (isOpen) {
+          helpbotInput.focus();
+      }
+  }
+
+  function appendHelpbotMessage(role, text, sources = []) {
+      const message = document.createElement('div');
+      message.classList.add('helpbot-message', role);
+      const body = document.createElement('div');
+      body.textContent = text;
+      message.appendChild(body);
+
+      if (sources.length > 0) {
+          const sourceList = document.createElement('div');
+          sourceList.classList.add('helpbot-sources');
+          const label = document.createElement('div');
+          label.classList.add('helpbot-sources-label');
+          label.textContent = 'Sources';
+          sourceList.appendChild(label);
+
+          sources.forEach((source) => {
+              const link = document.createElement('a');
+              link.href = source.url;
+              link.target = '_blank';
+              link.rel = 'noreferrer';
+              link.textContent = source.title || source.url;
+              sourceList.appendChild(link);
+          });
+
+          message.appendChild(sourceList);
+      }
+
+      helpbotMessages.appendChild(message);
+      helpbotMessages.scrollTop = helpbotMessages.scrollHeight;
+      return message;
+  }
+
+  helpbotLauncher.addEventListener('click', () => {
+      const isOpen = helpbotPanel.classList.contains('hidden');
+      setHelpbotOpen(isOpen);
+  });
+
+  helpbotClose.addEventListener('click', () => {
+      setHelpbotOpen(false);
+  });
+
+  helpbotForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = helpbotInput.value.trim();
+      if (!message) {
+          return;
+      }
+
+      appendHelpbotMessage('user', message);
+      helpbotInput.value = '';
+      const pendingMessage = appendHelpbotMessage('bot', 'Looking that up...');
+
+      try {
+          const response = await fetch('/help-chat', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                  message,
+                  history: helpbotHistory
+              })
+          });
+
+          const data = await response.json();
+          pendingMessage.textContent = '';
+          pendingMessage.appendChild(document.createTextNode(data.reply || 'I could not find anything for that request.'));
+
+          if (Array.isArray(data.sources) && data.sources.length > 0) {
+              const sourceList = document.createElement('div');
+              sourceList.classList.add('helpbot-sources');
+              const label = document.createElement('div');
+              label.classList.add('helpbot-sources-label');
+              label.textContent = 'Sources';
+              sourceList.appendChild(label);
+
+              data.sources.forEach((source) => {
+                  const link = document.createElement('a');
+                  link.href = source.url;
+                  link.target = '_blank';
+                  link.rel = 'noreferrer';
+                  link.textContent = source.title || source.url;
+                  sourceList.appendChild(link);
+              });
+
+              pendingMessage.appendChild(sourceList);
+          }
+
+          helpbotHistory.push({ role: 'user', content: message });
+          helpbotHistory.push({ role: 'assistant', content: data.reply || '' });
+      } catch (error) {
+          pendingMessage.textContent = 'The help bot could not reach the inventory right now.';
+      }
+  });
 });

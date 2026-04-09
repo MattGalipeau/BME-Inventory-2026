@@ -85,7 +85,35 @@ body {
     color: var(--tertiary-light);
 }
 
+.header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.bin-directory-panel {
+    border-bottom: 1px solid var(--tertiary-color);
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.bin-directory-header {
+    padding: 1rem 1.3rem 0.8rem;
+}
+
+.bin-directory-header h2 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.15rem;
+}
+
+.bin-directory-header p {
+    margin: 0.2rem 0 0;
+    color: var(--tertiary-light);
+}
+
 .new-entry-button,
+.bin-directory-button,
 #save-item-button,
 #newEntryModal .btn-primary {
     background-color: var(--primary-color);
@@ -94,6 +122,7 @@ body {
 }
 
 .new-entry-button:hover,
+.bin-directory-button:hover,
 #save-item-button:hover,
 #newEntryModal .btn-primary:hover {
     background-color: var(--secondary-color);
@@ -120,9 +149,32 @@ body {
 
 #newEntryModal .form-control,
 #newEntryModal .form-select {
-    background-color: var(--tertiary-light);
+    background-color: #d1d1d1;
     border: 1px solid var(--secondary-color);
     color: var(--dark-color);
+}
+
+#editItemModal .form-control,
+#editItemModal .form-select {
+    background-color: #d1d1d1; 
+    border: 1px solid var(--secondary-color);
+    color: var(--dark-color);
+}
+
+#newEntryModal .form-select:disabled,
+#newEntryModal .form-control:disabled,
+#editItemModal .form-select:disabled,
+#editItemModal .form-control:disabled {
+    background-color: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.52);
+    cursor: not-allowed;
+    box-shadow: inset 0 0 0 999px rgba(60, 60, 60, 0.18);
+}
+
+#newEntryModal .form-select:disabled option,
+#editItemModal .form-select:disabled option {
+    color: rgba(255, 255, 255, 0.52);
 }
 
 #newEntryModal .form-control::placeholder {
@@ -172,6 +224,39 @@ body {
     white-space: nowrap;
 }
 
+.sort-button {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+
+.sort-button::after {
+    content: '↕';
+    font-size: 0.85rem;
+    color: var(--tertiary-light);
+}
+
+.sort-button[data-direction='asc']::after {
+    content: '↑';
+    color: var(--primary-color);
+}
+
+.sort-button[data-direction='desc']::after {
+    content: '↓';
+    color: var(--primary-color);
+}
+
+.sort-button:hover {
+    color: var(--primary-color);
+}
+
 .inventory-table td {
     border-bottom-color: var(--tertiary-color);
 }
@@ -199,4 +284,20 @@ body {
         margin: 0 10px;
         font-size: 1rem;
     }
+}
+
+.sort-button::after {
+    content: '\2195';
+    font-size: 0.85rem;
+    color: var(--tertiary-light);
+}
+
+.sort-button[data-direction='asc']::after {
+    content: '\2191';
+    color: var(--primary-color);
+}
+
+.sort-button[data-direction='desc']::after {
+    content: '\2193';
+    color: var(--primary-color);
 }
