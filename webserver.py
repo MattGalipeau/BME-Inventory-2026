@@ -1,6 +1,9 @@
 import os
 import sqlite3
 import re
+import json
+import threading
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import functions
 
@@ -24,7 +27,22 @@ app.secret_key = "bme-inventory-editor-lock"
 DATABASE = 'bmeInventory.db'
 EDITOR_PASSWORD = "BMETech"
 HELP_BOT_MODEL = os.getenv("HELP_BOT_MODEL", "gpt-4.1-mini")
+IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4.1-mini")
+ITEM_IMAGES_FILE = "item_images.json"
 _help_bot_client = None
+_item_images_lock = threading.Lock()
+DEFAULT_ITEM_IMAGE_URLS = {
+    "Glowforge Plus": "https://shop.glowforge.com/cdn/shop/files/GF_Plus-HD-angle_1.png?v=1716220130&width=1445",
+    "Bambu P1S": "https://store-fe.bblcdn.com/static/image/dcae99bfb5bec067d977e24d0d84d3af.png?original-image",
+    "Microscope": "https://www.adorama.com/images/Large/cnmsls20.jpg",
+    "Prusa MK3": "https://www.printedsolid.com/cdn/shop/products/3325.jpg?v=1644874414&width=1946",
+    "Prusa MK3S": "https://www.printedsolid.com/cdn/shop/products/3325.jpg?v=1644874414&width=1946",
+    "Raise3D Pro2": "https://s1.raise3d.com/2023/03/Raise3D_Shop_inside_Pro2_1.jpg",
+    "SUNLU FilaDryer S4": "https://www.sunlu.com/cdn/shop/files/S4Largespcae.jpg?v=1760518008&width=4096",
+    "Othermill Desktop CNC": "https://cdn-shop.adafruit.com/970x728/2323-01.jpg",
+    "Voltera V-One": "https://www.voltera.io/images/vone/vone_frontView.webp",
+    "995D+ Solder Station": "https://www.millevolt.it/pimages/FCKeditorFiles/Image/yihua-995d-1.jpg",
+}
 
 def get_db():
     """Open a new database connection."""
@@ -51,6 +69,12 @@ def load_inventory_items(room_name=None):
                             END
                     END
                 ) AS WallNames,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN r.RoomName IS NOT NULL THEN
+                            r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
+                    END
+                ) AS LocationDetails,
                 MAX(datetime(ib.Date || ' ' || ib.Time)) AS LastAdded
             FROM items i
             LEFT JOIN item_bin ib ON ib.UPC = i.UPC
@@ -185,6 +209,90 @@ def load_help_inventory_snapshot():
         print("An error occurred while loading help inventory snapshot:", e.args[0])
     finally:
         db.close()
+
+    return items
+
+def build_item_thumbnail_data_uri(item_name):
+    safe_name = (item_name or "Item").strip()
+    initials = "".join(part[0] for part in safe_name.split()[:2]).upper() or "IT"
+    accent = "#70ffa7"
+    bg = "#274134"
+    svg = f"""
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
+        <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="{bg}" />
+                <stop offset="100%" stop-color="#3c3c3c" />
+            </linearGradient>
+        </defs>
+        <rect width="320" height="220" rx="28" fill="url(#g)" />
+        <circle cx="160" cy="92" r="46" fill="rgba(255,255,255,0.10)" />
+        <text x="160" y="107" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" font-weight="700" fill="{accent}">{initials}</text>
+        <text x="160" y="178" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#ffffff">Inventory Item</text>
+    </svg>
+    """.strip()
+    encoded = re.sub(r"\s+", " ", svg).replace("#", "%23").replace("<", "%3C").replace(">", "%3E").replace('"', "'")
+    return f"data:image/svg+xml,{encoded}"
+
+def load_item_image_map():
+    if not os.path.exists(ITEM_IMAGES_FILE):
+        return dict(DEFAULT_ITEM_IMAGE_URLS)
+
+    try:
+        with open(ITEM_IMAGES_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            if isinstance(data, dict):
+                return {**DEFAULT_ITEM_IMAGE_URLS, **data}
+    except (OSError, json.JSONDecodeError) as exc:
+        print("Could not load item image map:", exc)
+
+    return dict(DEFAULT_ITEM_IMAGE_URLS)
+
+def save_item_image_map(image_map):
+    payload = dict(image_map)
+    try:
+        with open(ITEM_IMAGES_FILE, "w", encoding="utf-8") as file:
+            json.dump(payload, file, indent=2, sort_keys=True)
+    except OSError as exc:
+        print("Could not save item image map:", exc)
+
+def get_item_image_url(item_name):
+    image_map = load_item_image_map()
+    return image_map.get(item_name) or build_item_thumbnail_data_uri(item_name)
+
+def load_recently_changed_items(limit=5):
+    db = get_db()
+    cursor = db.cursor()
+    items = []
+    try:
+        cursor.execute("""
+            SELECT
+                i.UPC,
+                i.Name,
+                i.TotalQty,
+                MAX(datetime(ib.Date || ' ' || ib.Time)) AS LastChanged,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN r.RoomName IS NOT NULL THEN r.RoomName
+                    END
+                ) AS Rooms
+            FROM items i
+            JOIN item_bin ib ON ib.UPC = i.UPC
+            LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
+            LEFT JOIN walls w ON w.WallID = b.WallID
+            LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            GROUP BY i.UPC, i.Name, i.TotalQty
+            ORDER BY LastChanged DESC, i.Name
+            LIMIT ?
+        """, (limit,))
+        items = [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print("An error occurred while loading recently changed items:", e.args[0])
+    finally:
+        db.close()
+
+    for item in items:
+        item["Thumbnail"] = get_item_image_url(item["Name"])
 
     return items
 
@@ -406,6 +514,9 @@ def get_help_bot_client():
 
     return _help_bot_client
 
+def get_image_agent_client():
+    return get_help_bot_client()
+
 def read_annotation_field(value, field_name, default=None):
     if isinstance(value, dict):
         return value.get(field_name, default)
@@ -464,9 +575,81 @@ Inventory data the bot is allowed to rely on for stock, item names, quantities, 
 Recent conversation:
 {history_text}
 
-Current user message:
-{message}
+    Current user message:
+    {message}
 """.strip()
+
+def build_image_agent_instructions():
+    return (
+        "You find product images for inventory items. "
+        "Prefer official manufacturer or company product pages first, and otherwise use a retailer product page. "
+        "Choose a stock-style product image with a clean white or plain background whenever possible. "
+        "Do not use Wikimedia, Flickr, maker wikis, forum posts, or editorial/news photos. "
+        "If the item is generic, choose a simple retailer stock-style image with a white background. "
+        "Return JSON only with keys image_url, source_url, and note. "
+        "Do not return markdown fences or extra text."
+    )
+
+def find_item_image_via_ai(item_name):
+    client = get_image_agent_client()
+    if client is None:
+        return None
+
+    prompt = (
+        f'Find the best product image URL for the inventory item "{item_name}". '
+        "Use web search. Prefer an official company/manufacturer website. "
+        "If no official image is available, use the cleanest stable stock-style image you can find. "
+        "The image should ideally look like a marketing/product listing image on a plain background."
+    )
+
+    response = client.responses.create(
+        model=IMAGE_AGENT_MODEL,
+        instructions=build_image_agent_instructions(),
+        tools=[{"type": "web_search"}],
+        input=prompt,
+    )
+
+    try:
+        parsed = json.loads(response.output_text)
+    except json.JSONDecodeError:
+        print(f"Image agent returned non-JSON for {item_name}: {response.output_text}")
+        return None
+
+    image_url = parsed.get("image_url")
+    if not image_url:
+        return None
+
+    return {
+        "image_url": image_url,
+        "source_url": parsed.get("source_url", ""),
+        "note": parsed.get("note", ""),
+    }
+
+def store_item_image(item_name, image_url):
+    with _item_images_lock:
+        image_map = load_item_image_map()
+        image_map[item_name] = image_url
+        save_item_image_map(image_map)
+
+def queue_item_image_lookup(item_name):
+    item_name = (item_name or "").strip()
+    if not item_name:
+        return
+
+    with _item_images_lock:
+        current_map = load_item_image_map()
+        if item_name in current_map:
+            return
+
+    def worker():
+        try:
+            result = find_item_image_via_ai(item_name)
+            if result and result.get("image_url"):
+                store_item_image(item_name, result["image_url"])
+        except Exception as exc:
+            print(f"Image lookup failed for {item_name}: {exc}")
+
+    threading.Thread(target=worker, daemon=True).start()
 
 def build_help_bot_instructions():
     return (
@@ -512,8 +695,8 @@ def inject_editor_auth():
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
-
-    return render_template('search.html')
+    recently_changed_items = load_recently_changed_items()
+    return render_template('search.html', recently_changed_items=recently_changed_items)
 
 @app.route('/edit', methods=['GET', 'POST'])
 def edit():
@@ -590,6 +773,7 @@ def search():
                 )
                 location_count = cursor.fetchone()[0]  # Get the count from the query
                 item["LocationCount"] = location_count  # Add the count to the item dictionary
+            item["Thumbnail"] = get_item_image_url(item.get("Name"))
         print(results)
     except sqlite3.Error as e:
         print("An error occurred:", e.args[0])
@@ -705,9 +889,13 @@ def update_entry():
 
             _, bin_upc = functions.createBin(storage_type, wall, room)
 
+        now = datetime.now()
+        current_date = now.strftime("%Y-%m-%d")
+        current_time = now.strftime("%H:%M:%S")
+
         cursor.execute(
-            "UPDATE item_bin SET Name = ?, Qty = ?, BinUPC = ? WHERE EntryID = ?",
-            (name, qty, bin_upc, entry_id)
+            "UPDATE item_bin SET Name = ?, Qty = ?, BinUPC = ?, Date = ?, Time = ? WHERE EntryID = ?",
+            (name, qty, bin_upc, current_date, current_time, entry_id)
         )
 
         qty_diff = qty - old_qty
@@ -737,6 +925,7 @@ def create_item():
             return jsonify({"error": "Missing required fields"}), 300
         else:
             functions.createItemLocator(item_name, bin_number, quantity, storage_type, wall, room)
+            queue_item_image_lookup(item_name)
             return jsonify({"success": True}), 200
     else:
         print("No data received")

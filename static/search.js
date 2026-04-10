@@ -10,52 +10,102 @@ async function performSearch(query) {
     displayResults(results);
 }
 
+function buildPrimaryCard(result, changedText = '') {
+    return `
+        <article
+            class="recent-item-card"
+            tabindex="0"
+            data-item-name="${result.Name || ''}"
+            data-item-upc="${result.UPC || ''}"
+            data-item-qty="${result.TotalQty || ''}"
+            data-item-room="${result.WallNames || result.Rooms || 'Unknown'}"
+            data-item-last-changed="${result.LastAdded || result.LastChanged || 'Unknown'}"
+            data-item-image="${result.Thumbnail || ''}"
+            data-item-location-details="${result.LocationDetails || ''}"
+            data-item-locations="${result.LocationCount || ''}"
+        >
+            <img class="recent-item-image" src="${result.Thumbnail || ''}" alt="${result.Name || 'Item'} thumbnail">
+            <div class="recent-item-body">
+                <h3>${result.Name || 'Unknown item'}</h3>
+                <p><strong>${changedText ? changedText : 'Changed'}:</strong> ${result.LastAdded || result.LastChanged || 'Unknown'}</p>
+            </div>
+        </article>
+    `;
+}
+
 function displayResults(results) {
-    const resultContainer = document.querySelector('.results');
-    resultContainer.innerHTML = '';
+    const cardTitle = document.getElementById('primary-card-title');
+    const cardSubtitle = document.getElementById('primary-card-subtitle');
+    const cardGrid = document.getElementById('primary-card-grid');
+
+    cardTitle.textContent = 'Closest Results';
+    cardSubtitle.textContent = results.length > 0
+        ? 'The closest matches for your search.'
+        : 'No matching inventory items were found.';
 
     if (results.length > 0) {
-        results.forEach(result => {
-            const resultDiv = document.createElement('div');
-            resultDiv.classList.add('result-each');
-            resultDiv.innerHTML = `
-                <p class="name"><strong>${result.Name}</strong></p>
-                <p class="item-info"><strong>Total Quantity: </strong>${result.TotalQty}</p>
-                <p class="item-info"><strong># of Locations: </strong>${result.LocationCount}</p>
-                <p class="item-info"><strong>UPC: </strong>${result.UPC}</p>
-            `;
-            resultContainer.appendChild(resultDiv);
-        });
+        cardGrid.innerHTML = results.map((result) => buildPrimaryCard(result, 'Updated')).join('');
     } else {
-        resultContainer.innerHTML = '<p class="search-error">No matches found.</p>';
+        cardGrid.innerHTML = '<p class="search-error compact-search-error">No matches found.</p>';
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search_query');
+    const itemImage = document.getElementById('itemImage');
+    const primaryCardTitle = document.getElementById('primary-card-title');
+    const primaryCardSubtitle = document.getElementById('primary-card-subtitle');
+    const primaryCardGrid = document.getElementById('primary-card-grid');
+    const defaultPrimaryCardMarkup = primaryCardGrid.innerHTML;
+
     searchInput.addEventListener('input', (event) => {
         const query = event.target.value;
         if (query) {
             performSearch(query);
         } else {
-            document.querySelector('.results').innerHTML = '';
+            primaryCardTitle.textContent = 'Recently Changed';
+            primaryCardSubtitle.textContent = 'The five most recently edited inventory items.';
+            primaryCardGrid.innerHTML = defaultPrimaryCardMarkup;
         }
     });
     const modal = document.getElementById('itemModal');
   const closeButton = document.querySelector('.close-button');
 
-  // Attach event listeners to the cards
-  document.querySelector('.results').addEventListener('click', (event) => {
-      const card = event.target.closest('.result-each');
-      if (card) {
-          const itemName = card.querySelector('.name').innerText;
-          const itemInfo = Array.from(card.querySelectorAll('.item-info')).map(info => info.innerText).join('\n');
+  const openCardModal = (card) => {
+      if (!card) return;
+      const locationDetails = card.dataset.itemLocationDetails;
+      const details = (locationDetails ? [
+          `UPC: ${card.dataset.itemUpc || ''}`,
+          `Total Quantity: ${card.dataset.itemQty || ''}`,
+          `# of Locations: ${card.dataset.itemLocations || ''}`,
+          `Locations: ${locationDetails}`,
+          `Last Changed: ${card.dataset.itemLastChanged || 'Unknown'}`
+      ] : [
+          `UPC: ${card.dataset.itemUpc || ''}`,
+          `Total Quantity: ${card.dataset.itemQty || ''}`,
+          `Room: ${card.dataset.itemRoom || 'Unknown'}`,
+          `Last Changed: ${card.dataset.itemLastChanged || 'Unknown'}`
+      ]).join('\n');
 
-          document.getElementById('itemTitle').innerText = itemName;
-          document.getElementById('itemDetails').innerText = itemInfo;
+      document.getElementById('itemTitle').innerText = card.dataset.itemName;
+      document.getElementById('itemDetails').innerText = details;
+      itemImage.src = card.dataset.itemImage || '';
+      itemImage.alt = `${card.dataset.itemName} image`;
+      itemImage.style.display = itemImage.src ? 'block' : 'none';
+      modal.style.display = 'block';
+  };
 
-          // Show the modal
-          modal.style.display = 'block';
+  primaryCardGrid.addEventListener('click', (event) => {
+      const card = event.target.closest('.recent-item-card');
+      openCardModal(card);
+  });
+
+  primaryCardGrid.addEventListener('keydown', (event) => {
+      const card = event.target.closest('.recent-item-card');
+      if (!card) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openCardModal(card);
       }
   });
 

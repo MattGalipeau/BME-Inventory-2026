@@ -41,12 +41,38 @@
         </form>
     </div>
 
-    <div class="quick-links">
-        <button onclick="performSearch('recent')">Recently Added</button>
-        <button onclick="performSearch('popular')">Frequently Accessed</button>
-    </div>
+    <section class="recently-changed" id="primary-card-section">
+        <div class="recently-changed-header">
+            <h2 id="primary-card-title">Recently Changed</h2>
+            <p id="primary-card-subtitle">The five most recently edited inventory items.</p>
+        </div>
+        <div class="recently-changed-grid" id="primary-card-grid">
+            {% if recently_changed_items %}
+                {% for item in recently_changed_items %}
+                <article
+                    class="recent-item-card"
+                    tabindex="0"
+                    data-item-name="{{ item.Name }}"
+                    data-item-upc="{{ item.UPC }}"
+                    data-item-qty="{{ item.TotalQty }}"
+                    data-item-room="{{ item.Rooms if item.Rooms else 'Unknown' }}"
+                    data-item-last-changed="{{ item.LastChanged if item.LastChanged else 'Unknown' }}"
+                    data-item-image="{{ item.Thumbnail }}"
+                >
+                    <img class="recent-item-image" src="{{ item.Thumbnail }}" alt="{{ item.Name }} thumbnail">
+                    <div class="recent-item-body">
+                        <h3>{{ item.Name }}</h3>
+                        <p><strong>Changed:</strong> {{ item.LastChanged if item.LastChanged else 'Unknown' }}</p>
+                    </div>
+                </article>
+                {% endfor %}
+            {% else %}
+                <p class="search-error">No recently changed items found.</p>
+            {% endif %}
+        </div>
+    </section>
 
-    <div class="results-container">
+    <div class="results-container hidden-results">
         <div class="results"></div>
     </div>
     <div class="tips">
@@ -65,6 +91,7 @@
   <div id="itemModal" class="modal-overlay">
     <div class="modal-content">
         <span class="close-button">&times;</span>
+        <img id="itemImage" class="item-modal-image" src="" alt="Item image">
         <h2 id="itemTitle">Item Name</h2>
         <p id="itemDetails">Details about the item go here...</p>
         <div class="modal-buttons">

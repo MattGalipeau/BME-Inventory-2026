@@ -121,11 +121,14 @@ async function submitForm() {
 
             // Optional: Handle server response (e.g., show a success message)
             console.log('Item added successfully!');
+            return true;
         } else {
             console.error('Failed to add item:', response.statusText);
+            return false;
         }
     } catch (error) {
         console.error('Error submitting form:', error);
+        return false;
     }
 }
 

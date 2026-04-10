@@ -355,6 +355,7 @@
             const binDirectoryPanel = document.getElementById('bin-directory-panel');
             const binsTableBody = document.getElementById('bins-table-body');
             const sortButtons = document.querySelectorAll('.sort-button');
+            let activeEditButton = null;
 
             async function loadBinOptions(selectedBin = '') {
                 if (!roomInput.value || !wallInput.value || !storageTypeInput.value) {
@@ -477,6 +478,7 @@
 
             document.querySelectorAll('.edit-item-button').forEach((button) => {
                 button.addEventListener('click', async () => {
+                    activeEditButton = button;
                     errorBox.classList.add('d-none');
                     errorBox.textContent = '';
                     entryIdInput.value = button.dataset.entryId;
@@ -522,14 +524,44 @@
                     return;
                 }
 
-                window.location.reload();
+                if (activeEditButton) {
+                    activeEditButton.dataset.itemName = nameInput.value;
+                    activeEditButton.dataset.itemQty = qtyInput.value;
+                    activeEditButton.dataset.room = roomInput.value;
+                    activeEditButton.dataset.wall = wallInput.value;
+                    activeEditButton.dataset.storageType = storageTypeInput.value;
+                    activeEditButton.dataset.binId = binNumberInput.value;
+
+                    const row = activeEditButton.closest('tr');
+                    if (row) {
+                        row.children[1].textContent = nameInput.value;
+                        row.children[3].textContent = qtyInput.value;
+                        row.children[4].textContent = roomInput.value;
+                        row.children[5].textContent = wallInput.value;
+                        row.children[6].textContent = storageTypeInput.value;
+                        row.children[7].textContent = binNumberInput.value;
+
+                        const now = new Date();
+                        const dateText = now.getFullYear() + '-' +
+                            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                            String(now.getDate()).padStart(2, '0');
+                        const timeText = String(now.getHours()).padStart(2, '0') + ':' +
+                            String(now.getMinutes()).padStart(2, '0') + ':' +
+                            String(now.getSeconds()).padStart(2, '0');
+                        row.children[8].textContent = dateText;
+                        row.children[9].textContent = timeText;
+                    }
+                }
+
+                editModal.hide();
             });
 
             const originalSubmitForm = window.submitForm;
             window.submitForm = async function submitAndRefresh() {
-                await originalSubmitForm();
-                newEntryModal.hide();
-                window.location.reload();
+                const wasSuccessful = await originalSubmitForm();
+                if (wasSuccessful) {
+                    newEntryModal.hide();
+                }
             };
         })();
     </script>
