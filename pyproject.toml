@@ -1,0 +1,13 @@
+[project]
+name = "bme-inventory-2026"
+version = "0.1.0"
+description = "BME inventory web application"
+requires-python = ">=3.12"
+dependencies = [
+  "Flask",
+  "openai",
+  "python-dotenv",
+]
+
+[tool.uv]
+package = false

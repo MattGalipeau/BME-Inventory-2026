@@ -1,0 +1,178 @@
+{
+  "995D+ Solder Station": {
+    "image_url": "/static/item-images/995d-solder-station-391b3daa40.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:24",
+    "validation": {}
+  },
+  "Bambu AMS": {
+    "image_url": "/static/item-images/bambu-ams-700d0dad98.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "https://us.store.bambulab.com/products/ams-2-pro",
+    "trigger": "manual_repair_after_fallback_fix",
+    "updated_at": "2026-04-14T16:47:24",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image shows a clear, centered product photo on a plain white background, depicting the Bambu Lab AMS 2 device with filament spools inside. The image style matches the clean retailer/manufacturer product-photo style and the product is clearly identifiable as the Bambu AMS."
+    }
+  },
+  "Bambu P1S": {
+    "image_url": "/static/item-images/bambu-p1s-fe8f677d13.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:19",
+    "validation": {}
+  },
+  "Glowforge Plus": {
+    "image_url": "/static/item-images/glowforge-plus-e899f57b76.png",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:19",
+    "validation": {}
+  },
+  "HP LaserJet P1606dn": {
+    "image_url": "/static/item-images/hp-laserjet-p1606dn-8e200b2dfb.jpg",
+    "note": "Newegg's product page for the HP LaserJet P1606DN includes accessible product images and is not from the manufacturer's marketing site.",
+    "source_url": "https://www.newegg.com/p/1EE-0005-00VD1",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T18:19:06",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image shows a clear product-style shot of an HP printer with visible model name HP LaserJet P1606dn on the device. It has a plain white background and appears to be a clean retailer/manufacturer style product photo."
+    }
+  },
+  "IdeaCentre AIO AMD (27\u2033)": {
+    "image_url": "/static/item-images/ideacentre-aio-amd-27-1dbedc7838.jpg",
+    "note": "Official product image from Best Buy",
+    "source_url": "https://www.bestbuy.com/product/lenovo-ideacentre-aio-27-fhd-ips-lcd-touch-screen-all-in-one-amd-ryzen-5-7535hs-8gb-memory-512gb-ssd-grey/6574644/openbox?condition=excellent",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T19:00:01",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image shows a clean, well-lit product image of an all-in-one computer with keyboard and mouse, resembling the Lenovo IdeaCentre AIO AMD (27\") model. It has a plain white background and is centered and clear, fitting the retailer/manufacturer product-photo style."
+    }
+  },
+  "IdeaCentre AIO AMD (27\u2033) - Luna Grey": {
+    "image_url": "/static/item-images/ideacentre-aio-amd-27-luna-grey-58a823b082.png",
+    "note": "Official Lenovo product page for the IdeaCentre AIO AMD (27\u2033) - Luna Grey, featuring accessible product images.",
+    "source_url": "https://www.lenovo.com/buy/us/en/27-inch-all-in-one-desktops-0aiz00a",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T18:33:20",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image shows a clean, centered product photo of an all-in-one desktop computer that matches the style and likely form factor of an IdeaCentre AIO AMD 27\" model in Luna Grey color. The background is plain white, which is typical for retailer/manufacturer product images."
+    }
+  },
+  "Microscope": {
+    "image_url": "/static/item-images/microscope-d3f04e5ab9.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:19",
+    "validation": {}
+  },
+  "Othermill Desktop CNC": {
+    "image_url": "/static/item-images/othermill-desktop-cnc-7846d43cb0.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:20",
+    "validation": {}
+  },
+  "P-Touch Cube Plus": {
+    "image_url": "/static/item-images/p-touch-cube-plus-651de71826.png",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "https://www.brother-usa.com/ptouch/cube-plus/home",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T17:44:38",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image shows a clean, centered product shot on a plain background. The product is clearly labeled 'P-touch CUBE Plus,' matching the named item. The style and presentation align well with typical manufacturer product photos."
+    }
+  },
+  "Pacman Arcade Machine": {
+    "image_url": "/static/item-images/pacman-arcade-machine-2764cfcd4d.png",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "https://arcades1up.com/products/pac-man-counter-cade/",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T17:37:29",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly depicts a Pacman arcade machine with recognizable Pacman branding and game screen. The photo is clean with a black background and the product is centered and fully visible, matching the style of a retailer/manufacturer product photo."
+    }
+  },
+  "Prusa MK3": {
+    "image_url": "/static/item-images/prusa-mk3-e58d087299.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:19",
+    "validation": {}
+  },
+  "Prusa MK3S": {
+    "image_url": "/static/item-images/prusa-mk3s-e58d087299.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:20",
+    "validation": {}
+  },
+  "Raise3D E2": {
+    "image_url": "/static/item-images/raise3d-e2-c616812d84.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "https://www.raise3d.com/products/e2/",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T16:48:50",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image clearly shows three Raise3D E2 3D printers with the product name visible on the devices. The shot is a clean, professional-style product image with a plain grey background and well-lit, centered products, suitable as a retailer or manufacturer photo."
+    }
+  },
+  "Raise3D Pro2": {
+    "image_url": "/static/item-images/raise3d-pro2-a6e04f956e.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:20",
+    "validation": {}
+  },
+  "SUNLU FilaDryer S4": {
+    "image_url": "/static/item-images/sunlu-filadryer-s4-8995e674f3.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:20",
+    "validation": {}
+  },
+  "Sharpie": {
+    "image_url": "/static/item-images/sharpie-bcee53f34f.png",
+    "note": "Official Amazon product page for Sharpie Permanent Markers with accessible product images.",
+    "source_url": "https://www.amazon.com/Sharpie-Permanent-Markers-Assorted-Colors/dp/B00006IFEM",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T18:09:17",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image clearly shows a Sharpie marker with the brand name visible, and the product is centered on a plain white background, meeting the criteria for a clean retailer/manufacturer product photo."
+    }
+  },
+  "Voltera V-One": {
+    "image_url": "/static/item-images/voltera-v-one-7e8d56c647.jpg",
+    "note": "Seeded from current approved image map.",
+    "source_url": "",
+    "trigger": "current_inventory_seed",
+    "updated_at": "2026-04-14T16:47:21",
+    "validation": {}
+  }
+}

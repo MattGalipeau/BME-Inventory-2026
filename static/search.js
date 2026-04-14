@@ -10,7 +10,7 @@ async function performSearch(query) {
     displayResults(results);
 }
 
-function buildPrimaryCard(result, changedText = '') {
+function buildPrimaryCard(result) {
     return `
         <article
             class="recent-item-card"
@@ -27,7 +27,7 @@ function buildPrimaryCard(result, changedText = '') {
             <img class="recent-item-image" src="${result.Thumbnail || ''}" alt="${result.Name || 'Item'} thumbnail">
             <div class="recent-item-body">
                 <h3>${result.Name || 'Unknown item'}</h3>
-                <p><strong>${changedText ? changedText : 'Changed'}:</strong> ${result.LastAdded || result.LastChanged || 'Unknown'}</p>
+                <p><strong>Changed:</strong> ${result.LastAdded || result.LastChanged || 'Unknown'}</p>
             </div>
         </article>
     `;
@@ -44,7 +44,22 @@ function displayResults(results) {
         : 'No matching inventory items were found.';
 
     if (results.length > 0) {
-        cardGrid.innerHTML = results.map((result) => buildPrimaryCard(result, 'Updated')).join('');
+        cardGrid.innerHTML = results.map((result) => buildPrimaryCard(result)).join('');
+    } else {
+        cardGrid.innerHTML = '<p class="search-error compact-search-error">No matches found.</p>';
+    }
+}
+
+function showPrimaryCards(title, subtitle, results) {
+    const cardTitle = document.getElementById('primary-card-title');
+    const cardSubtitle = document.getElementById('primary-card-subtitle');
+    const cardGrid = document.getElementById('primary-card-grid');
+
+    cardTitle.textContent = title;
+    cardSubtitle.textContent = subtitle;
+
+    if (results.length > 0) {
+        cardGrid.innerHTML = results.map((result) => buildPrimaryCard(result)).join('');
     } else {
         cardGrid.innerHTML = '<p class="search-error compact-search-error">No matches found.</p>';
     }
@@ -53,9 +68,9 @@ function displayResults(results) {
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search_query');
     const itemImage = document.getElementById('itemImage');
+    const primaryCardGrid = document.getElementById('primary-card-grid');
     const primaryCardTitle = document.getElementById('primary-card-title');
     const primaryCardSubtitle = document.getElementById('primary-card-subtitle');
-    const primaryCardGrid = document.getElementById('primary-card-grid');
     const defaultPrimaryCardMarkup = primaryCardGrid.innerHTML;
 
     searchInput.addEventListener('input', (event) => {
@@ -142,11 +157,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   }
 
-  function appendHelpbotMessage(role, text, sources = []) {
+  function appendHelpbotMessage(role, text, sources = [], isTyping = false) {
       const message = document.createElement('div');
       message.classList.add('helpbot-message', role);
       const body = document.createElement('div');
-      body.textContent = text;
+      if (isTyping) {
+          body.classList.add('helpbot-typing');
+          body.innerHTML = '<span></span><span></span><span></span>';
+      } else {
+          body.textContent = text;
+      }
       message.appendChild(body);
 
       if (sources.length > 0) {
@@ -192,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       appendHelpbotMessage('user', message);
       helpbotInput.value = '';
-      const pendingMessage = appendHelpbotMessage('bot', 'Looking that up...');
+      const pendingMessage = appendHelpbotMessage('bot', '', [], true);
 
       try {
           const response = await fetch('/help-chat', {
@@ -209,6 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const data = await response.json();
           pendingMessage.textContent = '';
           pendingMessage.appendChild(document.createTextNode(data.reply || 'I could not find anything for that request.'));
+
+          if (Array.isArray(data.items) && data.items.length > 0) {
+              showPrimaryCards(
+                  'Bot Results',
+                  'Items the support bot found relevant to your question.',
+                  data.items
+              );
+          }
 
           if (Array.isArray(data.sources) && data.sources.length > 0) {
               const sourceList = document.createElement('div');

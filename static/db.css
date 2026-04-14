@@ -99,6 +99,10 @@ body {
 
 .bin-directory-header {
     padding: 1rem 1.3rem 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
 }
 
 .bin-directory-header h2 {
@@ -114,7 +118,9 @@ body {
 
 .new-entry-button,
 .bin-directory-button,
+.create-bin-button,
 #save-item-button,
+#create-bin-button,
 #newEntryModal .btn-primary {
     background-color: var(--primary-color);
     border: none;
@@ -123,7 +129,9 @@ body {
 
 .new-entry-button:hover,
 .bin-directory-button:hover,
+.create-bin-button:hover,
 #save-item-button:hover,
+#create-bin-button:hover,
 #newEntryModal .btn-primary:hover {
     background-color: var(--secondary-color);
     color: var(--dark-color);
@@ -134,21 +142,37 @@ body {
     color: var(--light-color);
 }
 
+.delete-entry-button {
+    background-color: #c94f4f;
+    border: none;
+    color: #ffffff;
+}
+
+.delete-entry-button:hover {
+    background-color: #e05f5f;
+    color: #ffffff;
+}
+
 #newEntryModal .modal-header,
-#newEntryModal .modal-footer {
+#newEntryModal .modal-footer,
+#createBinModal .modal-header,
+#createBinModal .modal-footer {
     border-color: var(--tertiary-color);
 }
 
-#newEntryModal .modal-title {
+#newEntryModal .modal-title,
+#createBinModal .modal-title {
     color: var(--primary-color);
 }
 
-#newEntryModal label {
+#newEntryModal label,
+#createBinModal label {
     color: var(--secondary-color);
 }
 
 #newEntryModal .form-control,
-#newEntryModal .form-select {
+#newEntryModal .form-select,
+#createBinModal .form-select {
     background-color: #d1d1d1;
     border: 1px solid var(--secondary-color);
     color: var(--dark-color);

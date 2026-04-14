@@ -115,20 +115,21 @@ async function submitForm() {
         });
 
         if (response.ok) {
+            const result = await response.json();
             // Clear specific fields
             document.getElementById('item_name').value = '';
             document.getElementById('quantity').value = '';
 
             // Optional: Handle server response (e.g., show a success message)
             console.log('Item added successfully!');
-            return true;
+            return result;
         } else {
             console.error('Failed to add item:', response.statusText);
-            return false;
+            return null;
         }
     } catch (error) {
         console.error('Error submitting form:', error);
-        return false;
+        return null;
     }
 }
 

@@ -120,7 +120,7 @@ body {
     height:18vh;
     padding: 3%;
 }
-form{
+.search-bar form{
     position: relative;
     transform: translate(0, 0);
     transition: all 1s;
@@ -134,7 +134,7 @@ form{
     padding: 5px;
 }
 
-input{
+.search-bar input{
     position: absolute;
     top: 0;
     left: 0;
@@ -149,7 +149,7 @@ input{
     padding: 0 20px;
 }
 
-.fa{
+.search-bar .fa{
     box-sizing: border-box;
     padding: 10px;
     width: 42.5px;
@@ -163,7 +163,7 @@ input{
     background: var(--primary-dark);
     color: var(--light-color);
 }
-.fa:hover{
+.search-bar .fa:hover{
     background: var(--secondary-color);
 }
 .results-container {
@@ -230,6 +230,11 @@ p{
     display: flex;
     justify-content: center;
     width: 100%;
+}
+
+.compact-search-error {
+    margin-top: 1rem;
+    font-size: 1.25rem;
 }
 .modal-overlay {
     display: none; /* Hidden by default */
@@ -332,6 +337,7 @@ p{
     border-radius: 18px;
     overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
 }
 
 .recent-item-card:hover {
@@ -463,6 +469,42 @@ p{
     color: var(--dark-color);
 }
 
+.helpbot-typing {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    min-height: 1.2rem;
+}
+
+.helpbot-typing span {
+    width: 0.44rem;
+    height: 0.44rem;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.28;
+    animation: helpbotTypingPulse 1s infinite ease-in-out;
+}
+
+.helpbot-typing span:nth-child(2) {
+    animation-delay: 0.16s;
+}
+
+.helpbot-typing span:nth-child(3) {
+    animation-delay: 0.32s;
+}
+
+@keyframes helpbotTypingPulse {
+    0%, 80%, 100% {
+        opacity: 0.28;
+        transform: translateY(0);
+    }
+
+    40% {
+        opacity: 1;
+        transform: translateY(-2px);
+    }
+}
+
 .helpbot-sources {
     margin-top: 0.65rem;
     padding-top: 0.55rem;
@@ -491,18 +533,34 @@ p{
 }
 
 .helpbot-form {
+    position: static;
+    transform: none;
+    width: 100%;
+    height: auto;
     display: flex;
+    align-items: center;
     gap: 0.75rem;
     padding: 1rem;
-    border-top: 1px solid var(--tertiary-color);
+    margin: 0;
     background: rgba(255, 255, 255, 0.04);
+    border: 0;
+    border-top: 1px solid var(--tertiary-color);
+    border-radius: 0;
+    box-sizing: border-box;
+    cursor: default;
 }
 
 .helpbot-input {
     position: static;
-    width: auto;
+    top: auto;
+    left: auto;
+    width: 100%;
+    min-width: 0;
     height: auto;
     flex: 1;
+    line-height: 1.25;
+    display: block;
+    outline: none;
     border: 1px solid var(--tertiary-color);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.1);
@@ -515,12 +573,16 @@ p{
 }
 
 .helpbot-send {
+    flex: 0 0 auto;
+    align-self: center;
+    min-width: 70px;
     border: none;
     border-radius: 14px;
     background: var(--primary-color);
     color: var(--dark-color);
     padding: 0.85rem 1rem;
     font-weight: 700;
+    line-height: 1;
 }
 
 .helpbot-send:hover {

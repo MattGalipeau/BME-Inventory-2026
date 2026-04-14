@@ -1,7 +1,7 @@
 import subprocess
 #import sys
 import sqlite3
-#import os
+import os
 import datetime
 
 DATABASE = 'bmeInventory.db'
@@ -14,11 +14,15 @@ cursor = cnt.cursor()
 def Print(Code_8, VbsFile, binType, binID):
     # Hey Ved, szVbsFile is calling the visual basic file I have inserted into this repo.
     # That file will have the "szItemCode" inserted into it. When you look in the vbs file, you can see that I change barcode text to this string.
+    wscript_path = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", "wscript.exe")
+    if not os.path.exists(wscript_path):
+        wscript_path = "wscript"
+
     if binType == None:
-        szBuf = "wscript \"{}\" \"{}\"".format(VbsFile, Code_8) # passes in an argument to the vbs, we are only passing in one arg, szItemCode.
+        szBuf = "\"{}\" \"{}\" \"{}\"".format(wscript_path, VbsFile, Code_8) # passes in an argument to the vbs, we are only passing in one arg, szItemCode.
     else:
         binType = f'{binType} #{binID}'
-        szBuf = "wscript \"{}\" \"{}\" \"{}\"".format(VbsFile, Code_8, binType) # passes in an argument to the vbs, we are only passing in one arg, szItemCode.
+        szBuf = "\"{}\" \"{}\" \"{}\" \"{}\"".format(wscript_path, VbsFile, Code_8, binType) # passes in an argument to the vbs, we are only passing in one arg, szItemCode.
     subprocess.run(szBuf, shell=True) # runs the file. I know you didn't like my past history with using subprocess lol. Or maybe that was Raph.
     return 0
 
@@ -45,22 +49,13 @@ def createItemLocator(itemName, binNumber, Qty, binType, Wall, Room):
     dateTime = now.strftime("%Y-%m-%d %H:%M:%S")
     date, time = dateTime.split(" ")
 
-    binUPC = binUPCFinder(binType, binNumber)
+    binUPC = binUPCFinder(binType, binNumber, WallID)
     print(binUPC)
-    cursor.execute("SELECT * FROM item_bin WHERE BinUPC LIKE ?", (binUPC,))
-    resultBin = cursor.fetchone()
-    print(resultBin)
-    if resultBin:
-        clearing = cursor.fetchall()
-        cursor.execute("SELECT * FROM bins WHERE BinUPC LIKE ? AND WallID LIKE ?", (binUPC,WallID))
-        resultBin = cursor.fetchone()
-        if resultBin:
-            executive = [(UPC, itemName, binUPC, Qty, date, time)]
-            cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, Qty, Date, Time) VALUES(?,?,?,?,?,?)", executive)
-            TotalQtyChange(UPC, Qty)
-            cnt.commit()
-        else: 
-            print("Woah there pal, this would be an error. Your bin and location do not align.")
+    if binUPC is not None:
+        executive = [(UPC, itemName, binUPC, Qty, date, time)]
+        cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, Qty, Date, Time) VALUES(?,?,?,?,?,?)", executive)
+        TotalQtyChange(UPC, Qty)
+        cnt.commit()
     else:
         binID, binUPC = createBin(binType, Wall, Room)
         executive = [(UPC, itemName, binUPC, Qty, date, time)]
@@ -98,8 +93,6 @@ def createItem(itemName):
     except:
         UPC = 10000001
 
-    VbsFile = "BcdLabel.vbs" 
-    Print(UPC, VbsFile, None, None)
     executive = [(UPC, 0, itemName)]
 
     try:
@@ -110,6 +103,10 @@ def createItem(itemName):
     except:
         print("Item already exists: this should not have happened, as function only called when it does not exist. Maybe another error idk")
     cnt.commit()
+
+def printItemUPC(upc):
+    VbsFile = "BcdLabel.vbs"
+    return Print(upc, VbsFile, None, None)
 
 def wallDecider(Wall, Room):
     # Room 110 is 1-4, 110A is 5-8, etc.
@@ -138,31 +135,23 @@ def deleteItemEntry(EntryID): #entry ID is the primary key for item_bin. Would i
     cnt.execute("DELETE FROM item_bin WHERE EntryID = ?", (EntryID,))
     cnt.commit()
 
-def binUPCFinder(binType, binID):
-    cursor.execute("SELECT * FROM bins WHERE BinType = ? AND BinID = ?", (binType, binID))
-    results = cursor.fetchall()
-    binID = len(results)
-    if binID:
-        binUPC = int(binID) + 50000000
-        if binType == "Bin":
-            binUPC = binUPC + 1000000
-        if binType == "Shelf":
-            binUPC = binUPC + 2000000
-        if binType == "Drawer":
-            binUPC = binUPC + 3000000
-        if binType == "Cabinet":
-            binUPC = binUPC + 4000000
-        if binType == "Tabletop":
-            binUPC = binUPC + 5000000
-        if binType == "Overhead":
-            binUPC = binUPC + 6000000
-        if binType == "Other":
-            binUPC = binUPC + 7000000
+def binUPCFinder(binType, binID, wallID=None):
+    if wallID is None:
+        cursor.execute(
+            "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ?",
+            (binType, binID)
+        )
     else:
-        binUPC = None
-        
-    clearing = cursor.fetchall()
-    return binUPC
+        cursor.execute(
+            "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ? AND WallID = ?",
+            (binType, binID, wallID)
+        )
+
+    result = cursor.fetchone()
+    if result:
+        return result[0]
+
+    return None
     
 
 def binUPCDecider(binType):
@@ -214,7 +203,7 @@ def editItemLocation(newBinLocation, EntryID, binType, Wall, Room):
     cnt.commit()
 
 def returnBinList(WallID, binType):
-    cursor.execute("SELECT BinID FROM bins WHERE WallID LIKE ? AND BinType LIKE ?", ((WallID, binType)))
+    cursor.execute("SELECT BinID FROM bins WHERE WallID = ? AND BinType = ?", (WallID, binType))
     rows = cursor.fetchall()
     theList =[{"id": row[0]} for row in rows]
     return theList
