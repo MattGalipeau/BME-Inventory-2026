@@ -130,6 +130,7 @@
                         <tr>
                             <th scope="col">Entry</th>
                             <th scope="col">Item Name</th>
+                            <th scope="col">Image</th>
                             <th scope="col">UPC</th>
                             <th scope="col">Qty</th>
                             <th scope="col">Room</th>
@@ -145,9 +146,19 @@
                     <tbody id="inventory-table-body">
                         {% if entries %}
                             {% for entry in entries %}
-                            <tr>
+                            <tr data-item-name="{{ entry.Name }}">
                                 <td>{{ entry.EntryID }}</td>
                                 <td>{{ entry.Name }}</td>
+                                <td>
+                                    <span
+                                        class="image-status-indicator image-status-{{ entry.ImageStatus or 'failed' }}"
+                                        data-image-status
+                                        data-item-name="{{ entry.Name }}"
+                                        data-status="{{ entry.ImageStatus or 'failed' }}"
+                                        title="Image status: {{ entry.ImageStatus or 'failed' }}"
+                                        aria-label="Image status: {{ entry.ImageStatus or 'failed' }}"
+                                    ></span>
+                                </td>
                                 <td>{{ entry.UPC }}</td>
                                 <td>{{ entry.Qty }}</td>
                                 <td>{{ entry.RoomName if entry.RoomName else 'Unknown' }}</td>
@@ -185,7 +196,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="12" class="empty-state">No items found in the database.</td>
+                                <td colspan="13" class="empty-state">No items found in the database.</td>
                             </tr>
                         {% endif %}
                     </tbody>
@@ -447,9 +458,19 @@
 
             function buildEntryRow(entry) {
                 return `
-                    <tr>
+                    <tr data-item-name="${entry.Name ?? ''}">
                         <td>${entry.EntryID ?? ''}</td>
                         <td>${entry.Name ?? ''}</td>
+                        <td>
+                            <span
+                                class="image-status-indicator image-status-${entry.ImageStatus || 'pending'}"
+                                data-image-status
+                                data-item-name="${entry.Name ?? ''}"
+                                data-status="${entry.ImageStatus || 'pending'}"
+                                title="Image status: ${entry.ImageStatus || 'pending'}"
+                                aria-label="Image status: ${entry.ImageStatus || 'pending'}"
+                            ></span>
+                        </td>
                         <td>${entry.UPC ?? ''}</td>
                         <td>${entry.Qty ?? ''}</td>
                         <td>${entry.RoomName || 'Unknown'}</td>
@@ -485,6 +506,54 @@
                         </td>
                     </tr>
                 `;
+            }
+
+            function applyImageStatus(indicator, status) {
+                if (!indicator) {
+                    return;
+                }
+
+                const normalizedStatus = ['pending', 'success', 'failed'].includes(status) ? status : 'failed';
+                indicator.dataset.status = normalizedStatus;
+                indicator.classList.remove('image-status-pending', 'image-status-success', 'image-status-failed');
+                indicator.classList.add(`image-status-${normalizedStatus}`);
+                indicator.title = `Image status: ${normalizedStatus}`;
+                indicator.setAttribute('aria-label', `Image status: ${normalizedStatus}`);
+            }
+
+            function startImageStatusPolling(row) {
+                const indicator = row?.querySelector('[data-image-status]');
+                const itemName = indicator?.dataset.itemName;
+                if (!indicator || !itemName || indicator.dataset.status !== 'pending') {
+                    return;
+                }
+
+                let attempts = 0;
+                const maxAttempts = 24;
+                const pollHandle = window.setInterval(async () => {
+                    attempts += 1;
+                    try {
+                        const response = await fetch(`{{ url_for("item_image_status") }}?item_name=${encodeURIComponent(itemName)}`);
+                        if (!response.ok) {
+                            if (attempts >= maxAttempts) {
+                                applyImageStatus(indicator, 'failed');
+                                window.clearInterval(pollHandle);
+                            }
+                            return;
+                        }
+
+                        const result = await response.json();
+                        applyImageStatus(indicator, result.status);
+                        if (result.status !== 'pending' || attempts >= maxAttempts) {
+                            window.clearInterval(pollHandle);
+                        }
+                    } catch (error) {
+                        if (attempts >= maxAttempts) {
+                            applyImageStatus(indicator, 'failed');
+                            window.clearInterval(pollHandle);
+                        }
+                    }
+                }, 2500);
             }
 
             function bindEditButton(button) {
@@ -705,6 +774,7 @@
 
             document.querySelectorAll('.edit-item-button').forEach((button) => bindEditButton(button));
             document.querySelectorAll('.print-item-button').forEach((button) => bindPrintButton(button));
+            document.querySelectorAll('#inventory-table-body tr[data-item-name]').forEach((row) => startImageStatusPolling(row));
 
             [roomInput, wallInput, storageTypeInput].forEach((input) => {
                 input.addEventListener('change', () => loadBinOptions());
@@ -748,11 +818,11 @@
                     const row = activeEditButton.closest('tr');
                     if (row) {
                         row.children[1].textContent = nameInput.value;
-                        row.children[3].textContent = qtyInput.value;
-                        row.children[4].textContent = roomInput.value;
-                        row.children[5].textContent = wallInput.value;
-                        row.children[6].textContent = storageTypeInput.value;
-                        row.children[7].textContent = binNumberInput.value;
+                        row.children[4].textContent = qtyInput.value;
+                        row.children[5].textContent = roomInput.value;
+                        row.children[6].textContent = wallInput.value;
+                        row.children[7].textContent = storageTypeInput.value;
+                        row.children[8].textContent = binNumberInput.value;
 
                         const now = new Date();
                         const dateText = now.getFullYear() + '-' +
@@ -761,8 +831,8 @@
                         const timeText = String(now.getHours()).padStart(2, '0') + ':' +
                             String(now.getMinutes()).padStart(2, '0') + ':' +
                             String(now.getSeconds()).padStart(2, '0');
-                        row.children[8].textContent = dateText;
-                        row.children[9].textContent = timeText;
+                        row.children[9].textContent = dateText;
+                        row.children[10].textContent = timeText;
                     }
                 }
 
@@ -803,7 +873,7 @@
                 }
 
                 if (inventoryTableBody && !inventoryTableBody.querySelector('tr')) {
-                    inventoryTableBody.innerHTML = '<tr><td colspan="12" class="empty-state">No items found in the database.</td></tr>';
+                    inventoryTableBody.innerHTML = '<tr><td colspan="13" class="empty-state">No items found in the database.</td></tr>';
                 }
 
                 editModal.hide();
@@ -869,6 +939,7 @@
                             if (newPrintButton) {
                                 bindPrintButton(newPrintButton);
                             }
+                            startImageStatusPolling(firstRow);
                         }
                     }
                     newEntryModal.hide();

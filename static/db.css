@@ -285,6 +285,42 @@ body {
     border-bottom-color: var(--tertiary-color);
 }
 
+.image-status-indicator {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 50%;
+    display: inline-block;
+    vertical-align: middle;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.image-status-success {
+    background: #5ef28b;
+}
+
+.image-status-pending {
+    background: #f2d35e;
+    animation: image-status-pulse 1.4s ease-in-out infinite;
+}
+
+.image-status-failed {
+    background: #f06c6c;
+}
+
+@keyframes image-status-pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.72;
+        transform: scale(1.08);
+    }
+}
+
 .edit-item-button {
     white-space: nowrap;
 }

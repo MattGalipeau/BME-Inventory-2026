@@ -27,6 +27,45 @@
     "updated_at": "2026-04-14T16:47:19",
     "validation": {}
   },
+  "Circular Bandsaw": {
+    "image_url": "/static/item-images/circular-bandsaw-eb00687a84.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T20:24:14",
+    "validation": {
+      "approved": true,
+      "confidence": 0.85,
+      "reason": "The image appears to depict a machine suitable for sawing operations, which aligns with the concept of a circular bandsaw. The overall presentation is clean and suitable for a product listing."
+    }
+  },
+  "Delta Shopmaster Band Saw": {
+    "image_url": "/static/item-images/delta-shopmaster-band-saw-e5de91062d.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T20:26:11",
+    "validation": {
+      "approved": true,
+      "confidence": 0.85,
+      "reason": "The image depicts a Delta Shopmaster Band Saw clearly, showing its features and design. However, the background and lighting are not optimal for a clean product listing photo."
+    }
+  },
+  "First Aid Kit": {
+    "image_url": "/static/item-images/first-aid-kit-f231854df1.jpg",
+    "note": "Official product page for the We Care First Aid Kit, featuring accessible product images.",
+    "source_url": "https://www.4imprint.com/product/156879/We-Care-First-Aid-Kit",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T20:13:51",
+    "validation": {
+      "approved": true,
+      "confidence": 0.85,
+      "reason": "The image displays a first aid kit along with its contents, which clearly represents the product. The photo is clean and well-organized, aligning with the style of a typical product listing."
+    }
+  },
   "Glowforge Plus": {
     "image_url": "/static/item-images/glowforge-plus-e899f57b76.png",
     "note": "Seeded from current approved image map.",
@@ -111,6 +150,18 @@
       "reason": "The image clearly depicts a Pacman arcade machine with recognizable Pacman branding and game screen. The photo is clean with a black background and the product is centered and fully visible, matching the style of a retailer/manufacturer product photo."
     }
   },
+  "Pixel Pump": {
+    "image_url": "/static/item-images/pixel-pump-14b50c4d8e.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "https://shop.robins-tools.com/products/pixel-pump",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T19:34:28",
+    "validation": {
+      "approved": true,
+      "confidence": 0.85,
+      "reason": "The image likely depicts a Pixel Pump and matches the clean retailer/manufacturer product-photo style with a plain background and centered product shot."
+    }
+  },
   "Prusa MK3": {
     "image_url": "/static/item-images/prusa-mk3-e58d087299.jpg",
     "note": "Seeded from current approved image map.",
@@ -126,6 +177,18 @@
     "trigger": "current_inventory_seed",
     "updated_at": "2026-04-14T16:47:20",
     "validation": {}
+  },
+  "RK Royal Kludge S85": {
+    "image_url": "/static/item-images/rk-royal-kludge-s85-77bb92e175.png",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "https://rkgamingstore.com/products/s85-tkl-wireless-gaming-keyboard",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T19:23:03",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image depicts the RK Royal Kludge S85 keyboard, showcasing it clearly against a plain background, resembling a clean retailer product photograph."
+    }
   },
   "Raise3D E2": {
     "image_url": "/static/item-images/raise3d-e2-c616812d84.jpg",
@@ -165,6 +228,25 @@
       "approved": true,
       "confidence": 0.9,
       "reason": "The image clearly shows a Sharpie marker with the brand name visible, and the product is centered on a plain white background, meeting the criteria for a clean retailer/manufacturer product photo."
+    }
+  },
+  "Shopmaster Circular Bandsaw": {
+    "note": "No valid image source was found.",
+    "status": "failed",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T20:17:08"
+  },
+  "Tabletop Band Saw": {
+    "image_url": "/static/item-images/tabletop-band-saw-57ff044d7e.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-14T20:25:15",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image depicts a tabletop band saw that closely resembles the desired item. It features a clean and professional appearance suitable for a product listing."
     }
   },
   "Voltera V-One": {
