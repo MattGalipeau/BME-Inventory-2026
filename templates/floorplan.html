@@ -258,6 +258,30 @@
             margin-top: 0.75rem;
         }
 
+        .room-search-wrap {
+            margin-top: 0.85rem;
+        }
+
+        .room-search {
+            width: 100%;
+            padding: 0.7rem 0.85rem;
+            border-radius: 10px;
+            border: 1px solid var(--tertiary-color);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--light-color);
+            outline: none;
+        }
+
+        .room-search::placeholder {
+            color: var(--tertiary-light);
+        }
+
+        .result-meta {
+            margin: 0.65rem 0 0;
+            color: var(--tertiary-light);
+            font-size: 0.9rem;
+        }
+
         .filter-chip {
             display: inline-block;
             padding: 0.3rem 0.7rem;
@@ -421,6 +445,18 @@
                             <a class="clear-filter" href="{{ url_for('floorplan') }}">Clear filter</a>
                         {% endif %}
                     </div>
+                    {% if selected_room and items|length > 10 %}
+                        <div class="room-search-wrap">
+                            <input
+                                type="search"
+                                class="room-search"
+                                id="room-search"
+                                placeholder="Search within room {{ selected_room }}"
+                                aria-label="Search within room {{ selected_room }}"
+                            >
+                            <p class="result-meta" id="room-search-meta">Showing 10 of {{ items|length }} results</p>
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="table-scroll">
                     <table class="inventory-table">
@@ -433,10 +469,13 @@
                                 <th scope="col">Last Added</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="floorplan-items-body">
                             {% if items %}
                                 {% for item in items %}
-                                <tr>
+                                <tr
+                                    data-item-row
+                                    data-search-text="{{ (item.Name ~ ' ' ~ item.UPC ~ ' ' ~ (item.WallNames if item.WallNames else '') ~ ' ' ~ (item.LastAdded if item.LastAdded else ''))|lower }}"
+                                >
                                     <td>{{ item.Name }}</td>
                                     <td>{{ item.UPC }}</td>
                                     <td>{{ item.TotalQty }}</td>
@@ -506,6 +545,45 @@
                         }, 280);
                     });
                 });
+            }
+
+            const roomSearchInput = document.getElementById('room-search');
+            const roomSearchMeta = document.getElementById('room-search-meta');
+            const itemRows = Array.from(document.querySelectorAll('[data-item-row]'));
+
+            function updateVisibleRoomRows() {
+                if (!itemRows.length) {
+                    return;
+                }
+
+                const query = (roomSearchInput?.value || '').trim().toLowerCase();
+                let visibleCount = 0;
+                let matchCount = 0;
+
+                itemRows.forEach((row) => {
+                    const haystack = row.dataset.searchText || '';
+                    const matches = !query || haystack.includes(query);
+                    if (matches) {
+                        matchCount += 1;
+                    }
+
+                    const shouldShow = matches && visibleCount < 10;
+                    row.style.display = shouldShow ? '' : 'none';
+                    if (shouldShow) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (roomSearchMeta) {
+                    roomSearchMeta.textContent = `Showing ${visibleCount} of ${matchCount} result${matchCount === 1 ? '' : 's'}`;
+                }
+            }
+
+            if (roomSearchInput && itemRows.length > 10) {
+                updateVisibleRoomRows();
+                roomSearchInput.addEventListener('input', updateVisibleRoomRows);
+            } else if (itemRows.length > 10) {
+                updateVisibleRoomRows();
             }
 
             const selectedButton = document.querySelector('.room-button.active-room');
