@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BME Floor Plan</title>
+    <title>ItemGuessr</title>
     <style>
         :root {
             --primary-dark: #32714a;
@@ -78,6 +78,78 @@
         }
 
         .nav-link.active { color: var(--primary-color); }
+        .nav-user-email { color: var(--secondary-color); cursor: default; }
+        .sign-out-form { margin: 0; }
+        .sign-out-button { background: transparent; border: 0; padding: 0; }
+        .auth-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .auth-modal-overlay.visible { display: flex; }
+        .auth-modal-card {
+            width: min(380px, 100%);
+            background: #f5f5f5;
+            color: var(--dark-color);
+            border-radius: 14px;
+            padding: 1.25rem;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+        }
+        .auth-modal-card h2 {
+            margin: 0;
+            color: var(--primary-dark);
+            font-size: 1.35rem;
+        }
+        .auth-modal-card p {
+            margin: 0.5rem 0 0;
+            color: #555;
+        }
+        .auth-modal-label {
+            display: block;
+            margin-top: 1rem;
+            margin-bottom: 0.4rem;
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+        .auth-modal-input {
+            width: 100%;
+            border: 1px solid rgba(50, 113, 74, 0.35);
+            border-radius: 10px;
+            padding: 0.8rem 0.9rem;
+            background: #fff;
+            color: #222;
+        }
+        .auth-modal-error {
+            min-height: 1.2rem;
+            margin-top: 0.6rem;
+            color: #b34848;
+            font-size: 0.95rem;
+        }
+        .auth-modal-actions {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+        .auth-modal-actions button {
+            border: 0;
+            border-radius: 10px;
+            padding: 0.7rem 1rem;
+            font-weight: 700;
+        }
+        .auth-modal-cancel {
+            background: #d3d3d3;
+            color: #333;
+        }
+        .auth-modal-submit {
+            background: var(--primary-color);
+            color: var(--dark-color);
+        }
 
         .page {
             min-height: calc(100vh - 72px);
@@ -148,12 +220,6 @@
             display: block;
         }
 
-        .plan-clear {
-            position: absolute;
-            inset: 0;
-            z-index: 0;
-        }
-
         .room-button {
             position: absolute;
             padding: 0;
@@ -165,11 +231,16 @@
             text-decoration: none;
         }
 
-        body:not(.room-selected) .room-button:hover,
-        body:not(.room-selected) .room-button:focus-visible {
+        .room-button:hover,
+        .room-button:focus-visible {
             transform: scale(1.05);
             outline: none;
             z-index: 2;
+        }
+
+        .room-button:disabled {
+            cursor: default;
+            opacity: 0.72;
         }
 
         .room-slice {
@@ -188,10 +259,6 @@
             font-weight: 500;
             color: #111;
             pointer-events: none;
-        }
-
-        body.room-selected .room-label {
-            color: transparent;
         }
 
         .room-110a .room-label,
@@ -228,110 +295,112 @@
             height: 13.80%;
         }
 
-        .db-panel {
+        .game-panel {
             display: flex;
             flex-direction: column;
             min-height: 0;
         }
 
-        .table-header {
+        .game-header {
             padding: 1.1rem 1.2rem;
             border-bottom: 1px solid var(--tertiary-color);
         }
 
-        .table-header h1 {
+        .game-header h1 {
             margin: 0;
             color: var(--primary-color);
             font-size: 1.35rem;
         }
 
-        .table-header p {
+        .game-header p {
             margin: 0.25rem 0 0;
             color: var(--tertiary-light);
         }
 
-        .filter-row {
+        .score-row {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 0.75rem;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+            margin-top: 0.9rem;
         }
 
-        .room-search-wrap {
-            margin-top: 0.85rem;
-        }
-
-        .room-search {
-            width: 100%;
-            padding: 0.7rem 0.85rem;
-            border-radius: 10px;
-            border: 1px solid var(--tertiary-color);
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--light-color);
-            outline: none;
-        }
-
-        .room-search::placeholder {
-            color: var(--tertiary-light);
-        }
-
-        .result-meta {
-            margin: 0.65rem 0 0;
-            color: var(--tertiary-light);
-            font-size: 0.9rem;
-        }
-
-        .filter-chip {
+        .score-chip {
             display: inline-block;
-            padding: 0.3rem 0.7rem;
+            padding: 0.4rem 0.8rem;
             border-radius: 999px;
             background: rgba(112, 255, 167, 0.14);
             color: var(--secondary-color);
             font-size: 0.9rem;
         }
 
-        .clear-filter {
-            color: var(--secondary-color);
-            text-decoration: none;
-            font-size: 0.92rem;
-        }
-
-        .table-scroll {
-            overflow: auto;
-            min-height: 0;
+        .game-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.2rem;
             flex: 1;
         }
 
-        .inventory-table {
-            width: 100%;
-            border-collapse: collapse;
+        .guess-card {
+            padding: 1.1rem;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        .inventory-table th,
-        .inventory-table td {
-            padding: 0.8rem 0.9rem;
-            border-bottom: 1px solid var(--tertiary-color);
-            text-align: left;
-            vertical-align: top;
-        }
-
-        .inventory-table th {
-            position: sticky;
-            top: 0;
-            background: rgba(40, 40, 40, 0.95);
-            color: var(--secondary-color);
-            white-space: nowrap;
-        }
-
-        .inventory-table td {
-            color: var(--light-color);
-        }
-
-        .empty-state {
-            text-align: center;
+        .guess-label {
+            margin: 0;
             color: var(--tertiary-light);
-            padding: 1.2rem;
+            font-size: 0.88rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .guess-item {
+            margin: 0.5rem 0 0;
+            color: var(--light-color);
+            font-size: clamp(1.6rem, 2.1vw, 2.2rem);
+            line-height: 1.1;
+        }
+
+        .guess-help {
+            margin: 0.8rem 0 0;
+            color: var(--secondary-color);
+            font-size: 0.98rem;
+        }
+
+        .feedback-box {
+            padding: 1rem 1.05rem;
+            border-radius: 14px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--light-color);
+            line-height: 1.45;
+            min-height: 88px;
+        }
+
+        .feedback-box.correct {
+            background: rgba(112, 255, 167, 0.12);
+            border-color: rgba(112, 255, 167, 0.3);
+        }
+
+        .feedback-box.incorrect {
+            background: rgba(255, 174, 112, 0.12);
+            border-color: rgba(255, 174, 112, 0.28);
+        }
+
+        .legend {
+            color: var(--tertiary-light);
+            font-size: 0.95rem;
+            line-height: 1.45;
+        }
+
+        .game-empty {
+            color: var(--tertiary-light);
+            text-align: center;
+            padding: 1.4rem 1rem;
         }
 
         @media (max-width: 900px) {
@@ -347,7 +416,7 @@
             .plan-panel {
                 padding: 6px;
             }
-            .db-panel {
+            .game-panel {
                 min-height: 420px;
             }
             .plan-stage {
@@ -356,14 +425,20 @@
         }
     </style>
 </head>
-<body{% if selected_room %} class="room-selected"{% endif %}>
+<body>
     <nav class="navbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">BME Inventory</a>
+            <a class="navbar-brand" href="/">BMEnventory</a>
             <ul class="navbar-nav">
                 <li class="nav-item"><a class="nav-link" href="/">Search</a></li>
-                <li class="nav-item"><a class="nav-link active" href="/floorplan">Floorplan</a></li>
-                <li class="nav-item"><a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a></li>
+                <li class="nav-item"><a class="nav-link active" href="/floorplan">ItemGuessr</a></li>
+                <li class="nav-item"><a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a></li>
+                <li class="nav-item nav-user"><span class="nav-link nav-user-email">{{ signed_in_email }}</span></li>
+                <li class="nav-item nav-sign-out">
+                    <form method="post" action="{{ url_for('sign_out') }}" class="sign-out-form">
+                        <button type="submit" class="nav-link sign-out-button">Sign Out</button>
+                    </form>
+                </li>
             </ul>
         </div>
     </nav>
@@ -373,28 +448,27 @@
             <section class="panel plan-panel">
                 <div class="plan-wrap">
                     <div class="plan-stage" id="plan-stage">
-                        <a class="plan-clear" href="{{ url_for('floorplan') }}" aria-label="Clear room filter"></a>
                         <img
                             class="plan-base"
                             src="{{ url_for('static', filename='floorplan-base-colored.png') }}"
                             alt="Floorplan for rooms 110, 110A, 110B, and 110C"
                         >
-                        <a class="room-button room-110{% if selected_room == '110' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110') }}{% endif %}" aria-label="Room 110" title="Room 110" data-room-button>
+                        <button class="room-button room-110" type="button" aria-label="Room 110" title="Room 110" data-room-button data-room="110"{% if not current_item %} disabled{% endif %}>
                             <img class="room-slice" src="{{ url_for('static', filename='room-110-fill-colored.png') }}" alt="">
                             <span class="room-label">110</span>
-                        </a>
-                        <a class="room-button room-110a{% if selected_room == '110A' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110A') }}{% endif %}" aria-label="Room 110A" title="Room 110A" data-room-button>
+                        </button>
+                        <button class="room-button room-110a" type="button" aria-label="Room 110A" title="Room 110A" data-room-button data-room="110A"{% if not current_item %} disabled{% endif %}>
                             <img class="room-slice" src="{{ url_for('static', filename='room-110a-fill-colored.png') }}" alt="">
                             <span class="room-label">110A</span>
-                        </a>
-                        <a class="room-button room-110b{% if selected_room == '110B' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110B') }}{% endif %}" aria-label="Room 110B" title="Room 110B" data-room-button>
+                        </button>
+                        <button class="room-button room-110b" type="button" aria-label="Room 110B" title="Room 110B" data-room-button data-room="110B"{% if not current_item %} disabled{% endif %}>
                             <img class="room-slice" src="{{ url_for('static', filename='room-110b-fill-colored.png') }}" alt="">
                             <span class="room-label">110B</span>
-                        </a>
-                        <a class="room-button room-110c{% if selected_room == '110C' %} active-room{% endif %}" href="{% if selected_room %}{{ url_for('floorplan') }}{% else %}{{ url_for('floorplan', room='110C') }}{% endif %}" aria-label="Room 110C" title="Room 110C" data-room-button>
+                        </button>
+                        <button class="room-button room-110c" type="button" aria-label="Room 110C" title="Room 110C" data-room-button data-room="110C"{% if not current_item %} disabled{% endif %}>
                             <img class="room-slice" src="{{ url_for('static', filename='room-110c-fill-colored.png') }}" alt="">
                             <span class="room-label">110C</span>
-                        </a>
+                        </button>
                     </div>
                     <div class="compass" aria-hidden="true">
                         <svg viewBox="0 0 100 100" role="img">
@@ -429,192 +503,197 @@
                 </div>
             </section>
 
-            <section class="panel db-panel">
-                <div class="table-header">
-                    <h1>Inventory Items</h1>
-                    <p>Sorted by most recently added.</p>
-                    <div class="filter-row">
-                        <span class="filter-chip">
-                            {% if selected_room %}
-                                Showing room {{ selected_room }}
-                            {% else %}
-                                Showing all rooms
-                            {% endif %}
-                        </span>
-                        {% if selected_room %}
-                            <a class="clear-filter" href="{{ url_for('floorplan') }}">Clear filter</a>
-                        {% endif %}
+            <section class="panel game-panel">
+                <div class="game-header">
+                    <h1>ItemGuessr</h1>
+                    <p>Click the room where the current item is stored. A correct guess scores a point and loads a new item.</p>
+                    <div class="score-row">
+                        <span class="score-chip">Score: <strong id="game-score">{{ game_state.score }}</strong></span>
+                        <span class="score-chip">Attempts: <strong id="game-attempts">{{ game_state.attempts }}</strong></span>
                     </div>
-                    {% if selected_room and items|length > 10 %}
-                        <div class="room-search-wrap">
-                            <input
-                                type="search"
-                                class="room-search"
-                                id="room-search"
-                                placeholder="Search within room {{ selected_room }}"
-                                aria-label="Search within room {{ selected_room }}"
-                            >
-                            <p class="result-meta" id="room-search-meta">Showing 10 of {{ items|length }} results</p>
-                        </div>
-                    {% endif %}
                 </div>
-                <div class="table-scroll">
-                    <table class="inventory-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Item Name</th>
-                                <th scope="col">UPC</th>
-                                <th scope="col">Qty</th>
-                                <th scope="col">{% if selected_room %}Wall{% else %}Room{% endif %}</th>
-                                <th scope="col">Last Added</th>
-                            </tr>
-                        </thead>
-                        <tbody id="floorplan-items-body">
-                            {% if items %}
-                                {% for item in items %}
-                                <tr
-                                    data-item-row
-                                    data-search-text="{{ (item.Name ~ ' ' ~ item.UPC ~ ' ' ~ (item.WallNames if item.WallNames else '') ~ ' ' ~ (item.LastAdded if item.LastAdded else ''))|lower }}"
-                                >
-                                    <td>{{ item.Name }}</td>
-                                    <td>{{ item.UPC }}</td>
-                                    <td>{{ item.TotalQty }}</td>
-                                    <td>{{ item.WallNames if item.WallNames else 'Unknown' }}</td>
-                                    <td>{{ item.LastAdded if item.LastAdded else 'No entries yet' }}</td>
-                                </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="5" class="empty-state">No items found in the database.</td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+                <div class="game-body">
+                    {% if current_item %}
+                        <div class="guess-card">
+                            <p class="guess-label">Current Item</p>
+                            <h2 class="guess-item" id="current-item-name">{{ current_item.name }}</h2>
+                            <p class="guess-help">Choose the room that contains this item.</p>
+                        </div>
+                        <div class="feedback-box" id="game-feedback">{{ game_state.feedback }}</div>
+                        <p class="legend">The floorplan stays static for orientation. Only the room buttons are interactive, and each correct guess advances to the next item.</p>
+                    {% else %}
+                        <div class="game-empty">No floorplan game items are available yet. Once more inventory items have room locations, this page will start generating challenges.</div>
+                    {% endif %}
                 </div>
             </section>
         </div>
     </main>
+    <div class="auth-modal-overlay" id="auth-modal" aria-hidden="true">
+        <div class="auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+            <h2 id="auth-modal-title">Database Access</h2>
+            <p>Enter the editor password to open the database page.</p>
+            <label class="auth-modal-label" for="auth-password">Password</label>
+            <input class="auth-modal-input" id="auth-password" type="password" autocomplete="current-password">
+            <div class="auth-modal-error" id="auth-error"></div>
+            <div class="auth-modal-actions">
+                <button type="button" class="auth-modal-cancel" id="auth-cancel">Cancel</button>
+                <button type="button" class="auth-modal-submit" id="auth-submit">Continue</button>
+            </div>
+        </div>
+    </div>
     <script>
         (() => {
+            const authModal = document.getElementById('auth-modal');
+            const authPasswordInput = document.getElementById('auth-password');
+            const authError = document.getElementById('auth-error');
+            const authCancel = document.getElementById('auth-cancel');
+            const authSubmit = document.getElementById('auth-submit');
+
+            function closeAuthModal() {
+                authModal.classList.remove('visible');
+                authModal.setAttribute('aria-hidden', 'true');
+                authPasswordInput.value = '';
+                authError.textContent = '';
+            }
+
+            function openAuthModal() {
+                authModal.classList.add('visible');
+                authModal.setAttribute('aria-hidden', 'false');
+                authPasswordInput.value = '';
+                authError.textContent = '';
+                window.setTimeout(() => authPasswordInput.focus(), 0);
+            }
+
+            async function requestProtectedLinkAuth(link) {
+                openAuthModal();
+
+                return await new Promise((resolve) => {
+                    const cleanup = () => {
+                        authSubmit.removeEventListener('click', submitHandler);
+                        authCancel.removeEventListener('click', cancelHandler);
+                        authModal.removeEventListener('click', overlayHandler);
+                        authPasswordInput.removeEventListener('keydown', keyHandler);
+                    };
+
+                    const cancelHandler = () => {
+                        cleanup();
+                        closeAuthModal();
+                        resolve(null);
+                    };
+
+                    const overlayHandler = (event) => {
+                        if (event.target === authModal) {
+                            cancelHandler();
+                        }
+                    };
+
+                    const submitHandler = async () => {
+                        authError.textContent = '';
+                        const response = await fetch(link.dataset.authUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: authPasswordInput.value })
+                        });
+                        if (!response.ok) {
+                            authError.textContent = 'Incorrect password.';
+                            authPasswordInput.select();
+                            return;
+                        }
+                        const result = await response.json();
+                        cleanup();
+                        closeAuthModal();
+                        resolve(result);
+                    };
+
+                    const keyHandler = (event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            submitHandler();
+                        } else if (event.key === 'Escape') {
+                            cancelHandler();
+                        }
+                    };
+
+                    authSubmit.addEventListener('click', submitHandler);
+                    authCancel.addEventListener('click', cancelHandler);
+                    authModal.addEventListener('click', overlayHandler);
+                    authPasswordInput.addEventListener('keydown', keyHandler);
+                });
+            }
+
             document.querySelectorAll('[data-protected-link]').forEach((link) => {
                 link.addEventListener('click', async (event) => {
                     if (link.dataset.authenticated === 'true') return;
                     event.preventDefault();
-                    const password = window.prompt('Enter editor password:');
-                    if (password === null) return;
-                    const response = await fetch(link.dataset.authUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ password })
-                    });
-                    if (!response.ok) {
-                        window.alert('Incorrect password.');
+                    const result = await requestProtectedLinkAuth(link);
+                    if (!result) {
                         return;
                     }
-                    const result = await response.json();
                     window.location.href = result.redirect;
                 });
             });
 
-            const body = document.body;
-            const wrap = document.querySelector('.plan-wrap');
-            const stage = document.getElementById('plan-stage');
-            let isZoomingOut = false;
+            const roomButtons = Array.from(document.querySelectorAll('[data-room-button]'));
+            const gameScore = document.getElementById('game-score');
+            const gameAttempts = document.getElementById('game-attempts');
+            const gameFeedback = document.getElementById('game-feedback');
+            const currentItemName = document.getElementById('current-item-name');
+            let isSubmittingGuess = false;
 
-            function resetPlanZoom() {
-                if (!stage) return;
-                stage.style.setProperty('--plan-zoom', '1');
-                stage.style.setProperty('--plan-pan-x', '0%');
-                stage.style.setProperty('--plan-pan-y', '0%');
-                stage.style.setProperty('--plan-zoom-mobile', '1');
-                stage.style.setProperty('--plan-pan-x-mobile', '0%');
-                stage.style.setProperty('--plan-pan-y-mobile', '0%');
-            }
-
-            if (body.classList.contains('room-selected') && wrap && stage) {
-                wrap.querySelectorAll('a[href]').forEach((link) => {
-                    link.addEventListener('click', (event) => {
-                        const href = link.getAttribute('href');
-                        if (!href || isZoomingOut) return;
-                        event.preventDefault();
-                        isZoomingOut = true;
-                        body.classList.remove('room-selected');
-                        resetPlanZoom();
-                        window.setTimeout(() => {
-                            window.location.href = href;
-                        }, 280);
-                    });
-                });
-            }
-
-            const roomSearchInput = document.getElementById('room-search');
-            const roomSearchMeta = document.getElementById('room-search-meta');
-            const itemRows = Array.from(document.querySelectorAll('[data-item-row]'));
-
-            function updateVisibleRoomRows() {
-                if (!itemRows.length) {
+            async function submitGuess(room) {
+                if (isSubmittingGuess || !gameFeedback || !currentItemName) {
                     return;
                 }
 
-                const query = (roomSearchInput?.value || '').trim().toLowerCase();
-                let visibleCount = 0;
-                let matchCount = 0;
-
-                itemRows.forEach((row) => {
-                    const haystack = row.dataset.searchText || '';
-                    const matches = !query || haystack.includes(query);
-                    if (matches) {
-                        matchCount += 1;
-                    }
-
-                    const shouldShow = matches && visibleCount < 10;
-                    row.style.display = shouldShow ? '' : 'none';
-                    if (shouldShow) {
-                        visibleCount += 1;
-                    }
+                isSubmittingGuess = true;
+                roomButtons.forEach((button) => {
+                    button.disabled = true;
                 });
+                gameFeedback.classList.remove('correct', 'incorrect');
+                gameFeedback.textContent = `Checking room ${room}...`;
 
-                if (roomSearchMeta) {
-                    roomSearchMeta.textContent = `Showing ${visibleCount} of ${matchCount} result${matchCount === 1 ? '' : 's'}`;
+                try {
+                    const response = await fetch('{{ url_for("floorplan_guess") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ room })
+                    });
+
+                    if (response.status === 401) {
+                        window.location.href = '{{ url_for("sign_in_page") }}';
+                        return;
+                    }
+
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        gameFeedback.textContent = result.error || 'Could not submit that guess.';
+                        return;
+                    }
+
+                    if (gameScore) {
+                        gameScore.textContent = result.score;
+                    }
+                    if (gameAttempts) {
+                        gameAttempts.textContent = result.attempts;
+                    }
+                    currentItemName.textContent = result.current_item;
+                    gameFeedback.textContent = result.feedback;
+                    gameFeedback.classList.add(result.correct ? 'correct' : 'incorrect');
+                } catch (error) {
+                    gameFeedback.textContent = 'The guess could not be submitted right now.';
+                } finally {
+                    isSubmittingGuess = false;
+                    roomButtons.forEach((button) => {
+                        button.disabled = false;
+                    });
                 }
             }
 
-            if (roomSearchInput && itemRows.length > 10) {
-                updateVisibleRoomRows();
-                roomSearchInput.addEventListener('input', updateVisibleRoomRows);
-            } else if (itemRows.length > 10) {
-                updateVisibleRoomRows();
-            }
-
-            const selectedButton = document.querySelector('.room-button.active-room');
-            if (!selectedButton || !wrap || !stage) return;
-
-            const label = selectedButton.querySelector('.room-label');
-            if (!label) return;
-
-            const wrapRect = wrap.getBoundingClientRect();
-            const labelRect = label.getBoundingClientRect();
-            const roomRect = selectedButton.getBoundingClientRect();
-            const centerX = ((labelRect.left + (labelRect.width / 2)) - wrapRect.left) / wrapRect.width;
-            const centerY = ((labelRect.top + (labelRect.height / 2)) - wrapRect.top) / wrapRect.height;
-            const roomWidthRatio = roomRect.width / wrapRect.width;
-            const roomHeightRatio = roomRect.height / wrapRect.height;
-            const fitPadding = selectedButton.classList.contains('room-110') ? 0.10 : 0.08;
-            const zoomFitX = 1 / (roomWidthRatio + fitPadding);
-            const zoomFitY = 1 / (roomHeightRatio + fitPadding);
-            const zoom = Math.max(1.15, Math.min(zoomFitX, zoomFitY, 1.95));
-            const mobileZoom = Math.max(1.08, Math.min(zoom * 0.82, 1.5));
-            const panX = 50 - (zoom * centerX * 100);
-            const panY = 50 - (zoom * centerY * 100);
-            const mobilePanX = 50 - (mobileZoom * centerX * 100);
-            const mobilePanY = 50 - (mobileZoom * centerY * 100);
-
-            stage.style.setProperty('--plan-zoom', zoom.toFixed(2));
-            stage.style.setProperty('--plan-pan-x', `${panX.toFixed(2)}%`);
-            stage.style.setProperty('--plan-pan-y', `${panY.toFixed(2)}%`);
-            stage.style.setProperty('--plan-zoom-mobile', mobileZoom.toFixed(2));
-            stage.style.setProperty('--plan-pan-x-mobile', `${mobilePanX.toFixed(2)}%`);
-            stage.style.setProperty('--plan-pan-y-mobile', `${mobilePanY.toFixed(2)}%`);
+            roomButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    submitGuess(button.dataset.room);
+                });
+            });
         })();
     </script>
 </body>

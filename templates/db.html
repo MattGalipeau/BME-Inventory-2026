@@ -6,23 +6,31 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='db.css') }}">
-    <title>BME Inventory Database</title>
+    <title>BMEnventory Database</title>
 </head>
 
 <body>
     <nav class="navbar navbar-light bg-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">BME Inventory</a>
+            <a class="navbar-brand" href="/">BMEnventory</a>
             <div class="ms-auto">
                 <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/">Search</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/floorplan">Floorplan</a>
+                        <a class="nav-link" href="/floorplan">ItemGuessr</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a>
+                        <a class="nav-link active" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a>
+                    </li>
+                    <li class="nav-item nav-user">
+                        <span class="nav-link nav-user-email">{{ signed_in_email }}</span>
+                    </li>
+                    <li class="nav-item nav-sign-out">
+                        <form method="post" action="{{ url_for('sign_out') }}" class="sign-out-form">
+                            <button type="submit" class="nav-link sign-out-button">Sign Out</button>
+                        </form>
                     </li>
                 </ul>
             </div>
@@ -46,6 +54,15 @@
                         aria-controls="bin-directory-panel"
                     >
                         View Bin Directory
+                    </button>
+                    <button
+                        type="button"
+                        class="btn bin-directory-button mt-3 ms-2"
+                        id="toggle-user-tracking"
+                        aria-expanded="false"
+                        aria-controls="user-tracking-panel"
+                    >
+                        View User Tracking
                     </button>
                 </div>
             </div>
@@ -85,6 +102,7 @@
                                         Identifier
                                     </button>
                                 </th>
+                                <th scope="col">Print</th>
                                 <th scope="col">Delete</th>
                             </tr>
                         </thead>
@@ -106,6 +124,15 @@
                                     <td>
                                         <button
                                             type="button"
+                                            class="btn btn-sm btn-outline-success print-bin-button"
+                                            data-bin-upc="{{ bin.BinUPC if bin.BinUPC else '' }}"
+                                        >
+                                            Reprint Label
+                                        </button>
+                                    </td>
+                                    <td>
+                                        <button
+                                            type="button"
                                             class="btn btn-sm btn-outline-danger delete-bin-button"
                                             data-bin-upc="{{ bin.BinUPC if bin.BinUPC else '' }}"
                                         >
@@ -116,7 +143,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="6" class="empty-state">No bins found in the database.</td>
+                                    <td colspan="7" class="empty-state">No bins found in the database.</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -124,7 +151,48 @@
                 </div>
             </section>
 
-            <div class="table-responsive">
+            <section class="bin-directory-panel d-none" id="user-tracking-panel">
+                <div class="bin-directory-header">
+                    <div>
+                        <h2>User Tracking</h2>
+                        <p>Recent sign-ins and the inventory items users opened from search.</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle inventory-table" id="user-tracking-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Email</th>
+                                <th scope="col">Sign-In Date</th>
+                                <th scope="col">Sign-In Time</th>
+                                <th scope="col">Sign-Out Time</th>
+                                <th scope="col">Items Accessed</th>
+                                <th scope="col">Access Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-tracking-table-body">
+                            {% if user_tracking %}
+                                {% for record in user_tracking %}
+                                <tr>
+                                    <td>{{ record.Email }}</td>
+                                    <td>{{ record.SignInDate if record.SignInDate else 'Unknown' }}</td>
+                                    <td>{{ record.SignInTime if record.SignInTime else 'Unknown' }}</td>
+                                    <td>{{ record.SignOutTime if record.SignOutTime else 'Active session' }}</td>
+                                    <td>{{ record.AccessedItems if record.AccessedItems else 'None yet' }}</td>
+                                    <td>{{ record.AccessCount if record.AccessCount is not none else 0 }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="empty-state">No tracked user activity yet.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="table-responsive" id="inventory-table-panel">
                 <table class="table table-dark table-hover mb-0 align-middle inventory-table">
                     <thead>
                         <tr>
@@ -422,6 +490,20 @@
         </div>
     </div>
 
+    <div class="auth-modal-overlay" id="auth-modal" aria-hidden="true">
+        <div class="auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+            <h2 id="auth-modal-title">Database Access</h2>
+            <p>Enter the editor password to open the database page.</p>
+            <label class="auth-modal-label" for="auth-password">Password</label>
+            <input class="auth-modal-input" id="auth-password" type="password" autocomplete="current-password">
+            <div class="auth-modal-error" id="auth-error"></div>
+            <div class="auth-modal-actions">
+                <button type="button" class="auth-modal-cancel" id="auth-cancel">Cancel</button>
+                <button type="button" class="auth-modal-submit" id="auth-submit">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{url_for('static', filename='edit.js')}}"></script>
@@ -451,10 +533,90 @@
             const createBinButton = document.getElementById('create-bin-button');
             const toggleBinDirectoryButton = document.getElementById('toggle-bin-directory');
             const binDirectoryPanel = document.getElementById('bin-directory-panel');
+            const toggleUserTrackingButton = document.getElementById('toggle-user-tracking');
+            const userTrackingPanel = document.getElementById('user-tracking-panel');
+            const inventoryTablePanel = document.getElementById('inventory-table-panel');
             const binsTableBody = document.getElementById('bins-table-body');
             const sortButtons = document.querySelectorAll('.sort-button');
+            const authModal = document.getElementById('auth-modal');
+            const authPasswordInput = document.getElementById('auth-password');
+            const authError = document.getElementById('auth-error');
+            const authCancel = document.getElementById('auth-cancel');
+            const authSubmit = document.getElementById('auth-submit');
             let activeEditButton = null;
             const inventoryTableBody = document.getElementById('inventory-table-body');
+
+            function closeAuthModal() {
+                authModal.classList.remove('visible');
+                authModal.setAttribute('aria-hidden', 'true');
+                authPasswordInput.value = '';
+                authError.textContent = '';
+            }
+
+            function openAuthModal() {
+                authModal.classList.add('visible');
+                authModal.setAttribute('aria-hidden', 'false');
+                authPasswordInput.value = '';
+                authError.textContent = '';
+                window.setTimeout(() => authPasswordInput.focus(), 0);
+            }
+
+            async function requestProtectedLinkAuth(link) {
+                openAuthModal();
+
+                return await new Promise((resolve) => {
+                    const cleanup = () => {
+                        authSubmit.removeEventListener('click', submitHandler);
+                        authCancel.removeEventListener('click', cancelHandler);
+                        authModal.removeEventListener('click', overlayHandler);
+                        authPasswordInput.removeEventListener('keydown', keyHandler);
+                    };
+
+                    const cancelHandler = () => {
+                        cleanup();
+                        closeAuthModal();
+                        resolve(null);
+                    };
+
+                    const overlayHandler = (event) => {
+                        if (event.target === authModal) {
+                            cancelHandler();
+                        }
+                    };
+
+                    const submitHandler = async () => {
+                        authError.textContent = '';
+                        const response = await fetch(link.dataset.authUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: authPasswordInput.value })
+                        });
+                        if (!response.ok) {
+                            authError.textContent = 'Incorrect password.';
+                            authPasswordInput.select();
+                            return;
+                        }
+                        const result = await response.json();
+                        cleanup();
+                        closeAuthModal();
+                        resolve(result);
+                    };
+
+                    const keyHandler = (event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            submitHandler();
+                        } else if (event.key === 'Escape') {
+                            cancelHandler();
+                        }
+                    };
+
+                    authSubmit.addEventListener('click', submitHandler);
+                    authCancel.addEventListener('click', cancelHandler);
+                    authModal.addEventListener('click', overlayHandler);
+                    authPasswordInput.addEventListener('keydown', keyHandler);
+                });
+            }
 
             function buildEntryRow(entry) {
                 return `
@@ -609,6 +771,15 @@
                         <td>
                             <button
                                 type="button"
+                                class="btn btn-sm btn-outline-success print-bin-button"
+                                data-bin-upc="${bin.BinUPC ?? ''}"
+                            >
+                                Reprint Label
+                            </button>
+                        </td>
+                        <td>
+                            <button
+                                type="button"
                                 class="btn btn-sm btn-outline-danger delete-bin-button"
                                 data-bin-upc="${bin.BinUPC ?? ''}"
                             >
@@ -617,6 +788,26 @@
                         </td>
                     </tr>
                 `;
+            }
+
+            function bindPrintBinButton(button) {
+                button.addEventListener('click', async () => {
+                    const binUpc = button.dataset.binUpc;
+                    if (!binUpc) {
+                        return;
+                    }
+
+                    const response = await fetch('{{ url_for("print_bin_label") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bin_upc: binUpc })
+                    });
+
+                    if (!response.ok) {
+                        const result = await response.json().catch(() => ({}));
+                        window.alert(result.error || 'Failed to print bin label.');
+                    }
+                });
             }
 
             function bindDeleteBinButton(button) {
@@ -647,7 +838,7 @@
                     row?.remove();
                     const rows = binsTableBody ? binsTableBody.querySelectorAll('tr[data-room]') : [];
                     if (binsTableBody && rows.length === 0) {
-                        binsTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No bins found in the database.</td></tr>';
+                        binsTableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No bins found in the database.</td></tr>';
                     }
                 });
             }
@@ -686,28 +877,49 @@
                 link.addEventListener('click', async (event) => {
                     if (link.dataset.authenticated === 'true') return;
                     event.preventDefault();
-                    const password = window.prompt('Enter editor password:');
-                    if (password === null) return;
-                    const response = await fetch(link.dataset.authUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ password })
-                    });
-                    if (!response.ok) {
-                        window.alert('Incorrect password.');
+                    const result = await requestProtectedLinkAuth(link);
+                    if (!result) {
                         return;
                     }
-                    const result = await response.json();
                     window.location.href = result.redirect;
                 });
             });
 
+            function setDatabaseView(view) {
+                const showingBins = view === 'bins';
+                const showingTracking = view === 'tracking';
+                const showingItems = view === 'items';
+
+                if (binDirectoryPanel) {
+                    binDirectoryPanel.classList.toggle('d-none', !showingBins);
+                }
+                if (userTrackingPanel) {
+                    userTrackingPanel.classList.toggle('d-none', !showingTracking);
+                }
+                if (inventoryTablePanel) {
+                    inventoryTablePanel.classList.toggle('d-none', !showingItems);
+                }
+                if (toggleBinDirectoryButton) {
+                    toggleBinDirectoryButton.setAttribute('aria-expanded', String(showingBins));
+                    toggleBinDirectoryButton.textContent = showingBins ? 'Back To Items' : 'View Bin Directory';
+                }
+                if (toggleUserTrackingButton) {
+                    toggleUserTrackingButton.setAttribute('aria-expanded', String(showingTracking));
+                    toggleUserTrackingButton.textContent = showingTracking ? 'Back To Items' : 'View User Tracking';
+                }
+            }
+
             if (toggleBinDirectoryButton && binDirectoryPanel) {
                 toggleBinDirectoryButton.addEventListener('click', () => {
-                    const isOpen = !binDirectoryPanel.classList.contains('d-none');
-                    binDirectoryPanel.classList.toggle('d-none', isOpen);
-                    toggleBinDirectoryButton.setAttribute('aria-expanded', String(!isOpen));
-                    toggleBinDirectoryButton.textContent = isOpen ? 'View Bin Directory' : 'Hide Bin Directory';
+                    const isOpening = binDirectoryPanel.classList.contains('d-none');
+                    setDatabaseView(isOpening ? 'bins' : 'items');
+                });
+            }
+
+            if (toggleUserTrackingButton && userTrackingPanel) {
+                toggleUserTrackingButton.addEventListener('click', () => {
+                    const isOpening = userTrackingPanel.classList.contains('d-none');
+                    setDatabaseView(isOpening ? 'tracking' : 'items');
                 });
             }
 
@@ -770,6 +982,7 @@
                 sortRows(sortState.key, sortState.direction);
                 renderSortIndicators();
             }
+            document.querySelectorAll('.print-bin-button').forEach((button) => bindPrintBinButton(button));
             document.querySelectorAll('.delete-bin-button').forEach((button) => bindDeleteBinButton(button));
 
             document.querySelectorAll('.edit-item-button').forEach((button) => bindEditButton(button));
@@ -908,7 +1121,11 @@
                 if (binsTableBody && result.bin) {
                     binsTableBody.insertAdjacentHTML('beforeend', buildBinRow(result.bin));
                     const newRow = binsTableBody.lastElementChild;
+                    const newPrintButton = newRow?.querySelector('.print-bin-button');
                     const newDeleteButton = newRow?.querySelector('.delete-bin-button');
+                    if (newPrintButton) {
+                        bindPrintBinButton(newPrintButton);
+                    }
                     if (newDeleteButton) {
                         bindDeleteBinButton(newDeleteButton);
                     }

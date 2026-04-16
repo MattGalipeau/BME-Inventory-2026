@@ -1,4 +1,7 @@
 import os
+import os
+import math
+import random
 import sqlite3
 import re
 import json
@@ -16,6 +19,9 @@ from urllib.parse import urlparse, quote_plus
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import functions
+
+FLOORPLAN_GAME_ROOMS = ("110", "110A", "110B", "110C")
+FLOORPLAN_ROOM_PATTERN = re.compile(r"\b(?:110A|110B|110C|110)\b", re.IGNORECASE)
 
 def load_environment_file():
     try:
@@ -48,8 +54,11 @@ app.secret_key = "bme-inventory-editor-lock"
 
 # Database setup: Create an SQLite database and a table if it doesn't exist
 DATABASE = 'bmeInventory.db'
-EDITOR_PASSWORD = "BMETech"
+EDITOR_PASSWORD = "MattIsTech!"
+HELP_BOT_BACKEND = os.getenv("HELP_BOT_BACKEND", "openai").strip().lower()
 HELP_BOT_MODEL = os.getenv("HELP_BOT_MODEL", "gpt-4o-mini")
+HELP_BOT_OLLAMA_BASE_URL = os.getenv("HELP_BOT_OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+HELP_BOT_EMBED_MODEL = os.getenv("HELP_BOT_EMBED_MODEL", "mxbai-embed-large")
 IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4o-mini")
 IMAGE_AGENT_PAGE_ATTEMPTS = int(os.getenv("IMAGE_AGENT_PAGE_ATTEMPTS", "2"))
 IMAGE_AGENT_MAX_VALIDATIONS = int(os.getenv("IMAGE_AGENT_MAX_VALIDATIONS", "2"))
@@ -57,18 +66,86 @@ IMAGE_AGENT_AI_SEARCH_FALLBACK = os.getenv("IMAGE_AGENT_AI_SEARCH_FALLBACK", "fa
 ITEM_IMAGES_FILE = "item_images.json"
 ITEM_IMAGE_METADATA_FILE = "item_image_metadata.json"
 ITEM_IMAGE_CACHE_DIR = os.path.join("static", "item-images")
-_help_bot_client = None
+_help_bot_backend = None
+_image_agent_client = None
 _item_images_lock = threading.Lock()
 
 IMAGE_STATUS_PENDING = "pending"
 IMAGE_STATUS_SUCCESS = "success"
 IMAGE_STATUS_FAILED = "failed"
 
+PUBLIC_ENDPOINTS = {
+    "sign_in_page",
+    "sign_in",
+    "static",
+}
+
 def get_db():
     """Open a new database connection."""
     db = sqlite3.connect(DATABASE)
     db.row_factory = sqlite3.Row  # This make the DB return rows as dictionaries
     return db
+
+def ensure_tracking_tables():
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions(
+                SessionID INTEGER PRIMARY KEY AUTOINCREMENT,
+                Email TEXT NOT NULL,
+                SignInDate TEXT NOT NULL,
+                SignInTime TEXT NOT NULL,
+                SignOutDate TEXT,
+                SignOutTime TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_item_access(
+                AccessID INTEGER PRIMARY KEY AUTOINCREMENT,
+                SessionID INTEGER NOT NULL,
+                Email TEXT NOT NULL,
+                UPC INTEGER,
+                ItemName TEXT NOT NULL,
+                AccessDate TEXT NOT NULL,
+                AccessTime TEXT NOT NULL,
+                FOREIGN KEY (SessionID) REFERENCES user_sessions(SessionID)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_floorplan_stats(
+                Email TEXT PRIMARY KEY,
+                Score INTEGER NOT NULL DEFAULT 0,
+                Attempts INTEGER NOT NULL DEFAULT 0,
+                UpdatedAt TEXT NOT NULL
+            )
+        """)
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while ensuring tracking tables:", e.args[0])
+    finally:
+        db.close()
+
+ensure_tracking_tables()
+
+def is_signed_in():
+    return bool((session.get("signed_in_email") or "").strip())
+
+@app.before_request
+def require_sign_in():
+    endpoint = request.endpoint or ""
+    if endpoint in PUBLIC_ENDPOINTS:
+        return None
+
+    if is_signed_in():
+        return None
+
+    wants_json = request.path.startswith("/search") or request.path.startswith("/help-chat") or request.is_json
+    if wants_json:
+        return jsonify({"error": "Sign-in required", "redirect": url_for("sign_in_page")}), 401
+
+    return redirect(url_for("sign_in_page"))
 
 def load_inventory_items(room_name=None):
     db = get_db()
@@ -172,6 +249,131 @@ def load_database_entries():
         entry["ImageStatus"] = get_item_image_status(entry.get("Name"))
 
     return entries
+
+def load_user_tracking(limit=100):
+    db = get_db()
+    cursor = db.cursor()
+    sessions = []
+    try:
+        cursor.execute("""
+            SELECT
+                s.SessionID,
+                s.Email,
+                s.SignInDate,
+                s.SignInTime,
+                s.SignOutDate,
+                s.SignOutTime,
+                COUNT(a.AccessID) AS AccessCount,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN a.ItemName IS NOT NULL AND a.ItemName != '' THEN a.ItemName
+                    END
+                ) AS AccessedItems
+            FROM user_sessions s
+            LEFT JOIN user_item_access a ON a.SessionID = s.SessionID
+            GROUP BY
+                s.SessionID,
+                s.Email,
+                s.SignInDate,
+                s.SignInTime,
+                s.SignOutDate,
+                s.SignOutTime
+            ORDER BY
+                s.SessionID DESC
+            LIMIT ?
+        """, (limit,))
+        sessions = [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print("An error occurred while loading user tracking:", e.args[0])
+    finally:
+        db.close()
+
+    return sessions
+
+def log_user_sign_in(email):
+    email = (email or "").strip()
+    if not email:
+        return None
+
+    now = datetime.now()
+    sign_in_date = now.strftime("%Y-%m-%d")
+    sign_in_time = now.strftime("%H:%M:%S")
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO user_sessions (Email, SignInDate, SignInTime) VALUES (?, ?, ?)",
+            (email, sign_in_date, sign_in_time)
+        )
+        db.commit()
+        return cursor.lastrowid
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while logging sign in:", e.args[0])
+        return None
+    finally:
+        db.close()
+
+def log_user_sign_out(session_id):
+    if not session_id:
+        return
+
+    now = datetime.now()
+    sign_out_date = now.strftime("%Y-%m-%d")
+    sign_out_time = now.strftime("%H:%M:%S")
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE user_sessions
+            SET SignOutDate = ?, SignOutTime = ?
+            WHERE SessionID = ? AND (SignOutDate IS NULL OR SignOutTime IS NULL)
+            """,
+            (sign_out_date, sign_out_time, session_id)
+        )
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while logging sign out:", e.args[0])
+    finally:
+        db.close()
+
+def log_item_access(session_id, email, upc, item_name):
+    email = (email or "").strip()
+    item_name = (item_name or "").strip()
+    if not session_id or not email or not item_name:
+        return False
+
+    now = datetime.now()
+    access_date = now.strftime("%Y-%m-%d")
+    access_time = now.strftime("%H:%M:%S")
+
+    try:
+        upc_value = int(upc) if str(upc).strip() else None
+    except (TypeError, ValueError):
+        upc_value = None
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO user_item_access (SessionID, Email, UPC, ItemName, AccessDate, AccessTime)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, email, upc_value, item_name, access_date, access_time)
+        )
+        db.commit()
+        return True
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while logging item access:", e.args[0])
+        return False
+    finally:
+        db.close()
 
 def load_database_entry(entry_id):
     db = get_db()
@@ -498,6 +700,136 @@ def load_room_inventory(room_name):
 
     return items
 
+def extract_floorplan_rooms(*texts):
+    rooms = []
+    seen = set()
+
+    for text in texts:
+        for match in FLOORPLAN_ROOM_PATTERN.findall((text or "").upper()):
+            room = match.upper()
+            if room in seen:
+                continue
+            seen.add(room)
+            rooms.append(room)
+
+    return rooms
+
+def load_floorplan_game_candidates():
+    candidates = []
+
+    for item in load_search_cards():
+        rooms = extract_floorplan_rooms(item.get("Rooms"), item.get("LocationDetails"))
+        if not rooms:
+            continue
+        candidates.append({
+            "upc": int(item["UPC"]),
+            "name": item["Name"],
+            "rooms": rooms,
+        })
+
+    return candidates
+
+def get_default_floorplan_game_state():
+    return {
+        "score": 0,
+        "attempts": 0,
+        "target_upc": None,
+        "feedback": "Click the room where you think the item is stored.",
+        "last_guess": "",
+    }
+
+def load_floorplan_stats(email):
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return {"score": 0, "attempts": 0}
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            SELECT Score, Attempts
+            FROM user_floorplan_stats
+            WHERE Email = ?
+        """, (normalized_email,))
+        row = cursor.fetchone()
+        if not row:
+            return {"score": 0, "attempts": 0}
+        return {
+            "score": int(row["Score"] or 0),
+            "attempts": int(row["Attempts"] or 0),
+        }
+    except sqlite3.Error as e:
+        print("An error occurred while loading floorplan stats:", e.args[0])
+        return {"score": 0, "attempts": 0}
+    finally:
+        db.close()
+
+def save_floorplan_stats(email, score, attempts):
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO user_floorplan_stats (Email, Score, Attempts, UpdatedAt)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(Email) DO UPDATE SET
+                Score = excluded.Score,
+                Attempts = excluded.Attempts,
+                UpdatedAt = excluded.UpdatedAt
+        """, (
+            normalized_email,
+            max(0, int(score or 0)),
+            max(0, int(attempts or 0)),
+            datetime.now().isoformat(timespec="seconds"),
+        ))
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while saving floorplan stats:", e.args[0])
+    finally:
+        db.close()
+
+def get_persistent_floorplan_game_state(email):
+    state = get_default_floorplan_game_state()
+    stats = load_floorplan_stats(email)
+    state["score"] = stats["score"]
+    state["attempts"] = stats["attempts"]
+    return state
+
+def assign_floorplan_target(state, candidates, exclude_upc=None):
+    if not candidates:
+        state["target_upc"] = None
+        return
+
+    pool = [candidate for candidate in candidates if candidate["upc"] != exclude_upc]
+    if not pool:
+        pool = candidates
+
+    state["target_upc"] = random.choice(pool)["upc"]
+
+def ensure_floorplan_game_state():
+    state = session.get("floorplan_game")
+    if not isinstance(state, dict):
+        state = get_persistent_floorplan_game_state(session.get("signed_in_email"))
+
+    candidates = load_floorplan_game_candidates()
+    candidate_upcs = {candidate["upc"] for candidate in candidates}
+
+    if state.get("target_upc") not in candidate_upcs:
+        assign_floorplan_target(state, candidates)
+
+    session["floorplan_game"] = state
+    return state, candidates
+
+def get_floorplan_target_candidate(candidates, target_upc):
+    for candidate in candidates:
+        if candidate["upc"] == target_upc:
+            return candidate
+    return None
+
 def load_search_cards(search_query="", upcs=None):
     db = get_db()
     cursor = db.cursor()
@@ -715,6 +1047,16 @@ def get_inventory_intent_matches(message, catalog):
 
     intent_rules = [
         {
+            "keywords": ("keyboard", "keyboards", "mechanical keyboard", "wireless keyboard", "typing keyboard"),
+            "matches": ("keyboard", "royal kludge", "rk royal kludge", "rk "),
+            "label": "Keyboards"
+        },
+        {
+            "keywords": ("power tool", "power tools", "shop tool", "shop tools", "band saw", "bandsaw", "cnc"),
+            "matches": ("band saw", "shopmaster", "cnc", "othermill"),
+            "label": "Power tools"
+        },
+        {
             "keywords": ("pcb", "pcbs", "circuit board", "printed circuit", "board milling", "pcb milling", "pcb printer"),
             "matches": ("voltera", "othermill"),
             "label": "PCB-related machines"
@@ -757,10 +1099,68 @@ def get_inventory_intent_matches(message, catalog):
 
     return []
 
-def build_help_bot_reply(message):
+def dedupe_upcs(upcs):
+    unique_upcs = []
+    seen = set()
+    for upc in upcs:
+        if not upc or upc in seen:
+            continue
+        seen.add(upc)
+        unique_upcs.append(upc)
+    return unique_upcs
+
+def build_help_embedding_text(item):
+    name = (item.get("Name") or "").strip()
+    locations = (item.get("Locations") or "").strip()
+    qty = item.get("TotalQty")
+    parts = [name]
+
+    lowered_name = name.lower()
+    semantic_tags = []
+    if "royal kludge" in lowered_name or lowered_name.startswith("rk "):
+        semantic_tags.extend(["keyboard", "mechanical keyboard", "wireless keyboard"])
+
+    if semantic_tags:
+        parts.append("related terms " + ", ".join(semantic_tags))
+
+    if locations:
+        parts.append(f"stored at {locations}")
+    if qty is not None:
+        parts.append(f"quantity {qty}")
+    return ". ".join(part for part in parts if part)
+
+def find_semantic_help_matches(message, catalog, backend, limit=4, min_similarity=0.38):
+    if not message or not catalog or backend is None:
+        return []
+
+    try:
+        texts = [message] + [build_help_embedding_text(item) for item in catalog]
+        embeddings = backend.embed_texts(texts)
+    except Exception as exc:
+        print("Semantic help matching failed:", exc)
+        return []
+
+    if len(embeddings) != len(texts):
+        return []
+
+    query_embedding = embeddings[0]
+    scored_items = []
+    for item, item_embedding in zip(catalog, embeddings[1:]):
+        similarity = cosine_similarity(query_embedding, item_embedding)
+        if similarity >= min_similarity:
+            scored_items.append((similarity, item))
+
+    scored_items.sort(key=lambda entry: entry[0], reverse=True)
+    return [item for _, item in scored_items[:limit]]
+
+def resolve_help_bot_request(message, backend=None):
     text = (message or "").strip()
     if not text:
-        return "I can help find items, rooms, walls, storage types, and bin locations in the inventory."
+        return {
+            "reply": "I can help find items, rooms, walls, storage types, and bin locations in the inventory.",
+            "upcs": [],
+            "use_local_reply": True,
+        }
 
     lowered = text.lower()
     room_name = extract_room_name(text)
@@ -775,17 +1175,29 @@ def build_help_bot_reply(message):
                     f"{item['Name']} ({item['Locations'] or 'location unknown'})"
                     for item in fallback_matches
                 ]
-                return (
-                    f"I could not find any logged {label.lower()} in the inventory. "
-                    f"The closest related equipment I found is {fallback_label.lower()}: "
-                    + "; ".join(fallback_summaries) + "."
-                )
-            return f"I could not find any logged {label.lower()} in the inventory."
+                return {
+                    "reply": (
+                        f"I could not find any logged {label.lower()} in the inventory. "
+                        f"The closest related equipment I found is {fallback_label.lower()}: "
+                        + "; ".join(fallback_summaries) + "."
+                    ),
+                    "upcs": dedupe_upcs(item["UPC"] for item in fallback_matches if item.get("UPC")),
+                    "use_local_reply": True,
+                }
+            return {
+                "reply": f"I could not find any logged {label.lower()} in the inventory.",
+                "upcs": [],
+                "use_local_reply": True,
+            }
         summaries = [
             f"{item['Name']} ({item['Locations'] or 'location unknown'})"
             for item in matches
         ]
-        return f"The {label.lower()} I found are: " + "; ".join(summaries) + "."
+        return {
+            "reply": f"The {label.lower()} I found are: " + "; ".join(summaries) + ".",
+            "upcs": dedupe_upcs(item["UPC"] for item in matches if item.get("UPC")),
+            "use_local_reply": True,
+        }
 
     if "3d printers" in lowered or "3d printer" in lowered:
         printer_keywords = ("prusa", "bambu", "raise3d")
@@ -795,7 +1207,11 @@ def build_help_bot_reply(message):
                 f"{item['Name']} ({item['Locations'] or 'location unknown'})"
                 for item in printers
             ]
-            return "The logged 3D printers I found are: " + "; ".join(printer_summaries) + "."
+            return {
+                "reply": "The logged 3D printers I found are: " + "; ".join(printer_summaries) + ".",
+                "upcs": dedupe_upcs(item["UPC"] for item in printers if item.get("UPC")),
+                "use_local_reply": True,
+            }
 
     if "3d print" in lowered or "3d printing" in lowered:
         printer_keywords = ("prusa", "bambu", "raise3d")
@@ -815,18 +1231,31 @@ def build_help_bot_reply(message):
             )
 
         if parts:
-            return ". ".join(parts) + "."
+            related_items = printers + support_items
+            return {
+                "reply": ". ".join(parts) + ".",
+                "upcs": dedupe_upcs(item["UPC"] for item in related_items if item.get("UPC")),
+                "use_local_reply": True,
+            }
 
     if any(word in lowered for word in ["hello", "hi", "hey", "help"]) and len(lowered.split()) <= 6:
-        return (
-            "I can help you find where an item is stored, check what is in a room, or summarize item quantities. "
-            "Try asking something like 'Where is Microscope?' or 'What is in room 110A?'"
-        )
+        return {
+            "reply": (
+                "I can help you find where an item is stored, check what is in a room, or summarize item quantities. "
+                "Try asking something like 'Where is Microscope?' or 'What is in room 110A?'"
+            ),
+            "upcs": [],
+            "use_local_reply": True,
+        }
 
     if room_name and any(phrase in lowered for phrase in ["what is in", "what's in", "show", "list", "items in", "in room"]):
         room_items = load_room_inventory(room_name)
         if not room_items:
-            return f"I could not find any logged items in room {room_name}."
+            return {
+                "reply": f"I could not find any logged items in room {room_name}.",
+                "upcs": [],
+                "use_local_reply": True,
+            }
 
         preview = []
         for item in room_items[:8]:
@@ -834,89 +1263,237 @@ def build_help_bot_reply(message):
 
         extra_count = max(0, len(room_items) - len(preview))
         suffix = f" There are {extra_count} more item entries in that room." if extra_count else ""
-        return f"Room {room_name} currently has: " + "; ".join(preview) + "." + suffix
+        return {
+            "reply": f"Room {room_name} currently has: " + "; ".join(preview) + "." + suffix,
+            "upcs": dedupe_upcs(item["UPC"] for item in room_items if item.get("UPC")),
+            "use_local_reply": True,
+        }
 
     item_query = extract_item_query(text)
     if room_name and not item_query:
         room_items = load_room_inventory(room_name)
         if not room_items:
-            return f"I could not find any logged items in room {room_name}."
-        return f"Room {room_name} has {len(room_items)} logged item entries. Ask me to list the items in that room if you want the details."
+            return {
+                "reply": f"I could not find any logged items in room {room_name}.",
+                "upcs": [],
+                "use_local_reply": True,
+            }
+        return {
+            "reply": (
+                f"Room {room_name} has {len(room_items)} logged item entries. "
+                "Ask me to list the items in that room if you want the details."
+            ),
+            "upcs": dedupe_upcs(item["UPC"] for item in room_items if item.get("UPC")),
+            "use_local_reply": True,
+        }
 
     matches = find_item_records(item_query or text)
     if not matches:
-        return "I could not find a matching item. Try the exact item name, part of the name, a UPC, or ask about a room like 110A."
+        semantic_matches = find_semantic_help_matches(text, catalog, backend)
+        if semantic_matches:
+            summaries = [
+                f"{item['Name']} ({item['Locations'] or 'location unknown'})"
+                for item in semantic_matches
+            ]
+            return {
+                "reply": "The closest related inventory items I found are: " + "; ".join(summaries) + ".",
+                "upcs": dedupe_upcs(item["UPC"] for item in semantic_matches if item.get("UPC")),
+                "use_local_reply": True,
+            }
+        return {
+            "reply": "I could not find a matching item. Try the exact item name, part of the name, a UPC, or ask about a room like 110A.",
+            "upcs": [],
+            "use_local_reply": False,
+        }
 
     if len(matches) > 1 and (item_query or text) and not (item_query or text).isdigit():
         names = [f"{item['Name']} (UPC {item['UPC']})" for item in matches[:5]]
-        return "I found multiple possible matches: " + "; ".join(names) + ". Tell me which one you want and I can give its location."
+        return {
+            "reply": "I found multiple possible matches: " + "; ".join(names) + ". Tell me which one you want and I can give its location.",
+            "upcs": dedupe_upcs(item["UPC"] for item in matches if item.get("UPC")),
+            "use_local_reply": True,
+        }
 
     item = matches[0]
     if any(phrase in lowered for phrase in ["how many", "quantity", "qty", "count"]):
-        return f"{item['Name']} has a total logged quantity of {item['TotalQty']}."
+        return {
+            "reply": f"{item['Name']} has a total logged quantity of {item['TotalQty']}.",
+            "upcs": [item["UPC"]] if item.get("UPC") else [],
+            "use_local_reply": True,
+        }
 
     if item.get("Locations"):
-        return f"{item['Name']} (UPC {item['UPC']}) has total quantity {item['TotalQty']} and is located at {item['Locations']}."
+        return {
+            "reply": f"{item['Name']} (UPC {item['UPC']}) has total quantity {item['TotalQty']} and is located at {item['Locations']}.",
+            "upcs": [item["UPC"]] if item.get("UPC") else [],
+            "use_local_reply": True,
+        }
 
-    return f"{item['Name']} (UPC {item['UPC']}) has total quantity {item['TotalQty']}, but I could not find a logged location for it."
+    return {
+        "reply": f"{item['Name']} (UPC {item['UPC']}) has total quantity {item['TotalQty']}, but I could not find a logged location for it.",
+        "upcs": [item["UPC"]] if item.get("UPC") else [],
+        "use_local_reply": True,
+    }
+
+def build_help_bot_reply(message):
+    return resolve_help_bot_request(message, backend=get_help_bot_backend())["reply"]
 
 def get_help_bot_related_cards(message):
-    text = (message or "").strip()
-    if not text:
-        return []
-
-    room_name = extract_room_name(text)
-    catalog = load_help_inventory_snapshot()
-    intent_matches = get_inventory_intent_matches(text, catalog)
-    upcs = []
-
-    if intent_matches:
-        label, matches, _, fallback_matches = intent_matches[0]
-        chosen_matches = matches or fallback_matches
-        upcs = [item["UPC"] for item in chosen_matches if item.get("UPC")]
-    elif room_name and any(phrase in text.lower() for phrase in ["what is in", "what's in", "show", "list", "items in", "in room"]):
-        room_items = load_room_inventory(room_name)
-        upcs = [item["UPC"] for item in room_items if item.get("UPC")]
-    else:
-        item_query = extract_item_query(text)
-        matches = find_item_records(item_query or text)
-        upcs = [item["UPC"] for item in matches if item.get("UPC")]
-
+    upcs = resolve_help_bot_request(message, backend=get_help_bot_backend())["upcs"]
     if not upcs:
         return []
+    return load_search_cards(upcs=upcs)
 
-    unique_upcs = []
-    seen = set()
-    for upc in upcs:
-        if upc in seen:
-            continue
-        seen.add(upc)
-        unique_upcs.append(upc)
+def post_json(url, payload, timeout=60):
+    request_body = json.dumps(payload).encode("utf-8")
+    request_obj = urllib.request.Request(
+        url,
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request_obj, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
 
-    return load_search_cards(upcs=unique_upcs)
+def cosine_similarity(vector_a, vector_b):
+    if not vector_a or not vector_b or len(vector_a) != len(vector_b):
+        return 0.0
 
-def get_help_bot_client():
-    global _help_bot_client
+    dot_product = sum(a * b for a, b in zip(vector_a, vector_b))
+    norm_a = math.sqrt(sum(a * a for a in vector_a))
+    norm_b = math.sqrt(sum(b * b for b in vector_b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
 
-    if _help_bot_client is not None:
-        return _help_bot_client
+    return dot_product / (norm_a * norm_b)
+
+class HelpBotBackendAdapter:
+    mode = "local"
+
+    def generate_response(self, message, history, resolution, related_cards):
+        raise NotImplementedError
+
+    def embed_texts(self, texts):
+        return []
+
+class OpenAIHelpBotBackend(HelpBotBackendAdapter):
+    mode = "openai"
+
+    def __init__(self, client):
+        self.client = client
+
+    def generate_response(self, message, history, resolution, related_cards):
+        prompt = build_help_bot_prompt(message, history, resolution=resolution, related_cards=related_cards)
+        response = self.client.responses.create(
+            model=HELP_BOT_MODEL,
+            instructions=build_help_bot_instructions(),
+            tools=[{"type": "web_search"}],
+            input=prompt,
+        )
+        parsed = parse_json_object_from_text(response.output_text)
+        return {
+            "reply": str((parsed or {}).get("reply") or "").strip() or resolution["reply"],
+            "mentioned_upcs": normalize_help_bot_upcs((parsed or {}).get("mentioned_upcs"), resolution["upcs"]),
+            "sources": extract_response_sources(response),
+            "mode": self.mode,
+        }
+
+class OllamaHelpBotBackend(HelpBotBackendAdapter):
+    mode = "ollama"
+
+    def generate_response(self, message, history, resolution, related_cards):
+        prompt = build_help_bot_prompt(message, history, resolution=resolution, related_cards=related_cards)
+        response = post_json(
+            f"{HELP_BOT_OLLAMA_BASE_URL}/api/chat",
+            {
+                "model": HELP_BOT_MODEL,
+                "messages": [
+                    {"role": "system", "content": build_help_bot_instructions()},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+                "format": {
+                    "type": "object",
+                    "properties": {
+                        "reply": {"type": "string"},
+                        "mentioned_upcs": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                        },
+                    },
+                    "required": ["reply", "mentioned_upcs"],
+                },
+                "options": {
+                    "temperature": 0,
+                },
+            },
+        )
+        content = (((response or {}).get("message") or {}).get("content") or "").strip()
+        parsed = parse_json_object_from_text(content)
+        return {
+            "reply": str((parsed or {}).get("reply") or "").strip() or resolution["reply"],
+            "mentioned_upcs": normalize_help_bot_upcs((parsed or {}).get("mentioned_upcs"), resolution["upcs"]),
+            "sources": [],
+            "mode": self.mode,
+        }
+
+    def embed_texts(self, texts):
+        if not texts:
+            return []
+        response = post_json(
+            f"{HELP_BOT_OLLAMA_BASE_URL}/api/embed",
+            {
+                "model": HELP_BOT_EMBED_MODEL,
+                "input": texts,
+                "truncate": True,
+            },
+        )
+        embeddings = response.get("embeddings")
+        return embeddings if isinstance(embeddings, list) else []
+
+def get_openai_client():
+    global _image_agent_client
+
+    if _image_agent_client is not None:
+        return _image_agent_client
 
     if not os.getenv("OPENAI_API_KEY"):
         return None
 
     try:
         openai_module = importlib.import_module("openai")
-        _help_bot_client = openai_module.OpenAI()
+        _image_agent_client = openai_module.OpenAI()
     except ImportError:
         return None
     except Exception as exc:
-        print("Could not initialize help bot client:", exc)
-        _help_bot_client = None
+        print("Could not initialize OpenAI client:", exc)
+        _image_agent_client = None
 
-    return _help_bot_client
+    return _image_agent_client
+
+def get_help_bot_backend():
+    global _help_bot_backend
+
+    if _help_bot_backend is not None:
+        return _help_bot_backend
+
+    if HELP_BOT_BACKEND == "openai":
+        client = get_openai_client()
+        if client is not None:
+            _help_bot_backend = OpenAIHelpBotBackend(client)
+            return _help_bot_backend
+        print("OpenAI help backend requested but OPENAI_API_KEY is unavailable; falling back to local help resolution.")
+        return None
+
+    if HELP_BOT_BACKEND == "ollama":
+        _help_bot_backend = OllamaHelpBotBackend()
+        return _help_bot_backend
+
+    print(f"Unknown HELP_BOT_BACKEND '{HELP_BOT_BACKEND}', falling back to local help resolution.")
+    return None
 
 def get_image_agent_client():
-    return get_help_bot_client()
+    return get_openai_client()
 
 def read_annotation_field(value, field_name, default=None):
     if isinstance(value, dict):
@@ -950,12 +1527,22 @@ def extract_response_sources(response):
 
     return sources
 
-def build_help_bot_prompt(message, history):
+def build_help_bot_prompt(message, history, resolution=None, related_cards=None):
     inventory_rows = load_help_inventory_snapshot()
     inventory_context = "\n".join(
         f"- {item['Name']} | UPC {item['UPC']} | Qty {item['TotalQty']} | Locations: {item['Locations'] or 'Unknown'}"
         for item in inventory_rows
     )
+
+    resolution = resolution or {}
+    related_cards = related_cards or []
+
+    resolved_context = "\n".join(
+        f"- {item.get('Name', 'Unknown')} | UPC {item.get('UPC', 'Unknown')} | Qty {item.get('TotalQty', 'Unknown')} | Locations: {item.get('LocationDetails') or 'Unknown'}"
+        for item in related_cards
+    ) or "No resolved inventory matches."
+
+    local_reply = resolution.get("reply", "").strip() or "No local inventory summary available."
 
     history_lines = []
     for turn in history[-8:]:
@@ -972,6 +1559,12 @@ def build_help_bot_prompt(message, history):
     return f"""
 Inventory data the bot is allowed to rely on for stock, item names, quantities, and locations:
 {inventory_context}
+
+Locally resolved inventory matches for this request. Keep any specific inventory items you mention consistent with this set so the chat reply matches the UI cards:
+{resolved_context}
+
+Local inventory summary for this request:
+{local_reply}
 
 Recent conversation:
 {history_text}
@@ -1961,64 +2554,138 @@ def revalidate_existing_item_images():
 
 def build_help_bot_instructions():
     return (
-        "You are BME Inventory Help, a concise support chatbot for a lab inventory website. "
+        "You are BMEnventory Help, a concise support chatbot for a lab inventory website. "
         "You can use web search for general educational guidance, such as explaining what equipment is typically needed for a task. "
         "You must treat the provided inventory data as the only source of truth for what this lab actually has, where it is located, and how many are logged. "
         "Never invent inventory items, quantities, or locations that are not present in the provided data. "
+        "When the prompt includes a locally resolved inventory match set, keep any specific inventory item names you mention consistent with that set so the response stays aligned with the UI results. "
         "If the user asks what they need for a task, explain the typical needs briefly and then map those needs to the lab items that actually fit, if any. "
         "If the user asks generally about a type of machine or workflow, infer the likely category and return the matching inventory items even when the exact item names were not mentioned. "
         "Examples of this behavior include mapping PCB making or PCB machines to relevant PCB equipment in the inventory, and mapping 3D printing to the printers and supporting equipment in the inventory. "
         "If the inventory does not contain a needed item, say that clearly. "
         "When citing web-derived guidance, keep the answer concise and factual. "
-        "Do not claim to change data, edit data, reserve equipment, or perform actions."
+        "Do not claim to change data, edit data, reserve equipment, or perform actions. "
+        "Return JSON only with two keys: reply and mentioned_upcs. "
+        "reply must be a user-facing string. "
+        "mentioned_upcs must be an array of numeric UPCs for the specific inventory items you actually mention in reply. "
+        "If you do not mention any inventory items, return an empty mentioned_upcs array."
     )
 
+def normalize_help_bot_upcs(raw_upcs, allowed_upcs):
+    allowed = set(allowed_upcs or [])
+    normalized = []
+    seen = set()
+
+    for raw_upc in raw_upcs or []:
+        try:
+            upc = int(raw_upc)
+        except (TypeError, ValueError):
+            continue
+
+        if upc in seen:
+            continue
+
+        if allowed and upc not in allowed:
+            continue
+
+        seen.add(upc)
+        normalized.append(upc)
+
+    return normalized
+
 def generate_help_bot_response(message, history):
-    client = get_help_bot_client()
-    related_cards = get_help_bot_related_cards(message)
-    if client is None:
+    backend = get_help_bot_backend()
+    resolution = resolve_help_bot_request(message, backend=backend)
+    resolved_cards = load_search_cards(upcs=resolution["upcs"]) if resolution["upcs"] else []
+
+    if backend is None:
         return {
-            "reply": build_help_bot_reply(message),
+            "reply": resolution["reply"],
             "sources": [],
-            "mode": "local",
-            "items": related_cards,
+            "mode": "local-fallback",
+            "items": resolved_cards,
         }
 
     try:
-        prompt = build_help_bot_prompt(message, history)
-        response = client.responses.create(
-            model=HELP_BOT_MODEL,
-            instructions=build_help_bot_instructions(),
-            tools=[{"type": "web_search"}],
-            input=prompt,
-        )
+        backend_result = backend.generate_response(message, history, resolution, resolved_cards)
     except Exception as exc:
-        print("Help bot OpenAI call failed, using local fallback:", exc)
+        print(f"Help bot {getattr(backend, 'mode', 'backend')} call failed, using local fallback:", exc)
         return {
-            "reply": build_help_bot_reply(message),
+            "reply": resolution["reply"],
             "sources": [],
             "mode": "local-fallback",
-            "items": related_cards,
+            "items": resolved_cards,
         }
+    reply_text = backend_result.get("reply") or resolution["reply"]
+    mentioned_upcs = normalize_help_bot_upcs(backend_result.get("mentioned_upcs"), resolution["upcs"])
+
+    display_cards = load_search_cards(upcs=mentioned_upcs) if mentioned_upcs else resolved_cards
 
     return {
-        "reply": response.output_text,
-        "sources": extract_response_sources(response),
-        "mode": "openai",
-        "items": related_cards,
+        "reply": reply_text,
+        "sources": backend_result.get("sources", []),
+        "mode": backend_result.get("mode", "local"),
+        "items": display_cards,
     }
+
+def get_default_helpbot_history():
+    return [
+        {
+            "role": "assistant",
+            "content": "I can help locate items, summarize quantities, tell you what is in a room, and suggest which inventory items fit a task like 3D printing."
+        }
+    ]
+
+def get_helpbot_history():
+    history = session.get("helpbot_history")
+    if isinstance(history, list) and history:
+        return history
+    return get_default_helpbot_history()
 
 @app.context_processor
 def inject_editor_auth():
     return {
+        "signed_in": is_signed_in(),
+        "signed_in_email": session.get("signed_in_email", ""),
         "editor_authenticated": session.get("editor_authenticated", False),
         "database_authenticated": session.get("database_authenticated", False),
     }
 
+@app.route('/sign-in', methods=['GET'])
+def sign_in_page():
+    if is_signed_in():
+        return redirect(url_for('home'))
+    return render_template('sign_in.html')
+
+@app.route('/sign-in', methods=['POST'])
+def sign_in():
+    data = request.get_json(silent=True) or request.form or {}
+    email = (data.get('email') or '').strip()
+    normalized_email = email.lower()
+
+    if not normalized_email or not normalized_email.endswith('@uri.edu'):
+        return jsonify({"success": False, "error": "Enter a valid @uri.edu email address."}), 400
+
+    log_user_sign_out(session.get("tracked_session_id"))
+    session.clear()
+    session["signed_in_email"] = normalized_email
+    session["helpbot_history"] = get_default_helpbot_history()
+    session["floorplan_game"] = get_persistent_floorplan_game_state(normalized_email)
+    tracked_session_id = log_user_sign_in(normalized_email)
+    if tracked_session_id:
+        session["tracked_session_id"] = tracked_session_id
+    return jsonify({"success": True, "redirect": url_for('home')}), 200
+
+@app.route('/sign-out', methods=['POST'])
+def sign_out():
+    log_user_sign_out(session.get("tracked_session_id"))
+    session.clear()
+    return redirect(url_for('sign_in_page'))
+
 @app.route('/', methods=['GET', 'POST'])
 def home():
     recently_changed_items = load_recently_changed_items()
-    return render_template('search.html', recently_changed_items=recently_changed_items)
+    return render_template('search.html', recently_changed_items=recently_changed_items, helpbot_history=get_helpbot_history())
 
 @app.route('/edit', methods=['GET', 'POST'])
 def edit():
@@ -2041,10 +2708,10 @@ def editor_auth():
 def db():
     if not session.get("database_authenticated"):
         return redirect(url_for('home'))
-    session.pop("database_authenticated", None)
     entries = load_database_entries()
     bin_rows = load_bins_directory()
-    return render_template('db.html', entries=entries, bins=bin_rows)
+    user_tracking = load_user_tracking()
+    return render_template('db.html', entries=entries, bins=bin_rows, user_tracking=user_tracking)
 
 @app.route('/database-auth', methods=['POST'])
 def database_auth():
@@ -2057,13 +2724,50 @@ def database_auth():
 
 @app.route('/floorplan', methods=['GET'])
 def floorplan():
-    selected_room = request.args.get('room', '').strip()
-    valid_rooms = {"110", "110A", "110B", "110C"}
-    if selected_room not in valid_rooms:
-        selected_room = None
+    game_state, candidates = ensure_floorplan_game_state()
+    current_item = get_floorplan_target_candidate(candidates, game_state.get("target_upc"))
+    return render_template('floorplan.html', game_state=game_state, current_item=current_item)
 
-    items = load_inventory_items(selected_room)
-    return render_template('floorplan.html', items=items, selected_room=selected_room)
+@app.route('/floorplan-guess', methods=['POST'])
+def floorplan_guess():
+    data = request.get_json(silent=True) or {}
+    guessed_room = (data.get('room') or '').strip().upper()
+    if guessed_room not in FLOORPLAN_GAME_ROOMS:
+        return jsonify({"success": False, "error": "Select a valid room."}), 400
+
+    game_state, candidates = ensure_floorplan_game_state()
+    current_item = get_floorplan_target_candidate(candidates, game_state.get("target_upc"))
+    if not current_item:
+        return jsonify({"success": False, "error": "No floorplan game items are available yet."}), 400
+
+    game_state["attempts"] = int(game_state.get("attempts", 0)) + 1
+    game_state["last_guess"] = guessed_room
+    is_correct = guessed_room in current_item["rooms"]
+
+    if is_correct:
+        game_state["score"] = int(game_state.get("score", 0)) + 1
+        solved_item_name = current_item["name"]
+        solved_item_rooms = current_item["rooms"]
+        game_state["feedback"] = f"Correct. {solved_item_name} is stored in room {', '.join(solved_item_rooms)}."
+        assign_floorplan_target(game_state, candidates, exclude_upc=current_item["upc"])
+        current_item = get_floorplan_target_candidate(candidates, game_state.get("target_upc"))
+    else:
+        game_state["feedback"] = f"Not there. {current_item['name']} is not stored in room {guessed_room}. Try again."
+
+    session["floorplan_game"] = game_state
+    save_floorplan_stats(
+        session.get("signed_in_email"),
+        game_state.get("score", 0),
+        game_state.get("attempts", 0),
+    )
+    return jsonify({
+        "success": True,
+        "correct": is_correct,
+        "score": int(game_state.get("score", 0)),
+        "attempts": int(game_state.get("attempts", 0)),
+        "feedback": game_state.get("feedback", ""),
+        "current_item": current_item["name"] if current_item else "No item available",
+    })
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -2079,9 +2783,32 @@ def search():
 def help_chat():
     data = request.get_json(silent=True) or {}
     message = data.get('message', '')
-    history = data.get('history', [])
+    history = get_helpbot_history()
     result = generate_help_bot_response(message, history)
+    updated_history = list(history)
+    if message:
+        updated_history.append({"role": "user", "content": message})
+    updated_history.append({"role": "assistant", "content": result.get("reply", "")})
+    session["helpbot_history"] = updated_history[-20:]
+    result["history"] = session["helpbot_history"]
     return jsonify(result)
+
+@app.route('/track-item-access', methods=['POST'])
+def track_item_access():
+    if not is_signed_in():
+        return jsonify({"error": "Sign-in required", "redirect": url_for("sign_in_page")}), 401
+
+    data = request.get_json(silent=True) or {}
+    success = log_item_access(
+        session.get("tracked_session_id"),
+        session.get("signed_in_email"),
+        data.get("upc"),
+        data.get("item_name"),
+    )
+    if not success:
+        return jsonify({"error": "Could not track item access"}), 400
+
+    return jsonify({"success": True}), 200
 
 @app.route('/update-item', methods=['POST'])
 def update_item():
@@ -2277,6 +3004,40 @@ def print_item_label():
     except Exception as exc:
         print("An error occurred while printing item label:", exc)
         return jsonify({"error": "Failed to print item label"}), 500
+
+    return jsonify({"success": True}), 200
+
+@app.route('/print-bin-label', methods=['POST'])
+def print_bin_label():
+    data = request.get_json(silent=True) or {}
+    bin_upc = data.get('bin_upc')
+
+    if not bin_upc:
+        return jsonify({"error": "Missing bin identifier"}), 400
+
+    try:
+        bin_upc = int(bin_upc)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Bin identifier must be numeric"}), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT BinUPC, BinType, BinID FROM bins WHERE BinUPC = ?",
+            (bin_upc,)
+        )
+        bin_row = cursor.fetchone()
+        if not bin_row:
+            return jsonify({"error": "Bin not found"}), 404
+    finally:
+        db.close()
+
+    try:
+        functions.printBinUPC(bin_row["BinUPC"], bin_row["BinType"], bin_row["BinID"])
+    except Exception as exc:
+        print("An error occurred while printing bin label:", exc)
+        return jsonify({"error": "Failed to print bin label"}), 500
 
     return jsonify({"success": True}), 200
 

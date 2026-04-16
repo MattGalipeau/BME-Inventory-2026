@@ -9,6 +9,25 @@ DATABASE = 'bmeInventory.db'
 cnt = sqlite3.connect(DATABASE, check_same_thread=False) 
 cursor = cnt.cursor()
 
+def normalizeItemName(itemName):
+    return " ".join((itemName or "").split()).strip().lower()
+
+def findExistingItem(itemName):
+    normalized_name = normalizeItemName(itemName)
+    if not normalized_name:
+        return None
+
+    cursor.execute("SELECT UPC, Name FROM items ORDER BY UPC")
+    rows = cursor.fetchall()
+    for upc, existing_name in rows:
+        if normalizeItemName(existing_name) == normalized_name:
+            return {
+                "UPC": upc,
+                "Name": existing_name,
+            }
+
+    return None
+
 # This function will print out the barcode. Pass in szItemCode, which is a string of 8 numbers.
 # Can also be used for reprint. Will have to grab "UPC" from the specified row in the database, and pass as szItemCode to this function.
 def Print(Code_8, VbsFile, binType, binID):
@@ -28,20 +47,20 @@ def Print(Code_8, VbsFile, binType, binID):
 
 def createItemLocator(itemName, binNumber, Qty, binType, Wall, Room):
     # check db for upc in item table. if not exist, create item
+    itemName = " ".join((itemName or "").split()).strip()
+    if not itemName:
+        return
+
     WallID = wallDecider(Wall, Room)
     print(itemName, binNumber, Qty, binType, Wall, Room)
     clearing = cursor.fetchall()
-    
-    cursor.execute("SELECT * FROM item_bin WHERE Name LIKE ?", (itemName,))
-    result = cursor.fetchone()
-    if result:
-        pass
-    else: # else if there is no returned result from searching item_bin table for UPC, let us create it
-        createItem(itemName)    
 
-    UPC = cursor.execute("SELECT UPC FROM items WHERE Name LIKE ?", (itemName,))
-    UPC = cursor.fetchone()
-    UPC = UPC[0]
+    existingItem = findExistingItem(itemName)
+    if existingItem is None:
+        UPC, itemName = createItem(itemName)
+    else:
+        UPC = existingItem["UPC"]
+        itemName = existingItem["Name"]
 
     clearing = cursor.fetchall()
 
@@ -85,6 +104,14 @@ def createBin(binType, Wall, Room):
     return binID, binUPC
 
 def createItem(itemName):
+    itemName = " ".join((itemName or "").split()).strip()
+    if not itemName:
+        return None, ""
+
+    existingItem = findExistingItem(itemName)
+    if existingItem is not None:
+        return existingItem["UPC"], existingItem["Name"]
+
     cursor.execute("SELECT MAX(UPC) FROM items")
     maxUPC = cursor.fetchone()
 
@@ -96,17 +123,19 @@ def createItem(itemName):
     executive = [(UPC, 0, itemName)]
 
     try:
-        cursor.execute("SELECT Name FROM items WHERE Name LIKE ?", (itemName,))
-        checkingName = cursor.fetchone()
-        if checkingName == None:
-            cnt.executemany("INSERT INTO items (UPC, TotalQty, Name) VALUES(?,?,?)", executive)
+        cnt.executemany("INSERT INTO items (UPC, TotalQty, Name) VALUES(?,?,?)", executive)
     except:
         print("Item already exists: this should not have happened, as function only called when it does not exist. Maybe another error idk")
     cnt.commit()
+    return UPC, itemName
 
 def printItemUPC(upc):
     VbsFile = "BcdLabel.vbs"
     return Print(upc, VbsFile, None, None)
+
+def printBinUPC(bin_upc, bin_type, bin_id):
+    VbsFile = "BcdBinLabel.vbs"
+    return Print(bin_upc, VbsFile, bin_type, bin_id)
 
 def wallDecider(Wall, Room):
     # Room 110 is 1-4, 110A is 5-8, etc.

@@ -6,6 +6,13 @@ async function performSearch(query) {
         },
         body: JSON.stringify({ search_query: query })
     });
+    if (response.status === 401) {
+        const result = await response.json().catch(() => ({}));
+        if (result.redirect) {
+            window.location.href = result.redirect;
+        }
+        return;
+    }
     const results = await response.json();
     displayResults(results);
 }
@@ -108,6 +115,27 @@ document.addEventListener('DOMContentLoaded', () => {
       itemImage.alt = `${card.dataset.itemName} image`;
       itemImage.style.display = itemImage.src ? 'block' : 'none';
       modal.style.display = 'block';
+
+      const itemName = card.dataset.itemName || '';
+      if (itemName) {
+          fetch('/track-item-access', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                  upc: card.dataset.itemUpc || '',
+                  item_name: itemName
+              })
+          }).then(async (response) => {
+              if (response.status === 401) {
+                  const result = await response.json().catch(() => ({}));
+                  if (result.redirect) {
+                      window.location.href = result.redirect;
+                  }
+              }
+          }).catch(() => {});
+      }
   };
 
   primaryCardGrid.addEventListener('click', (event) => {
@@ -142,12 +170,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const helpbotForm = document.getElementById('helpbot-form');
   const helpbotInput = document.getElementById('helpbot-input');
   const helpbotMessages = document.getElementById('helpbot-messages');
-  const helpbotHistory = [
-      {
+  const helpbotHistoryElement = document.getElementById('helpbot-history-data');
+  const helpbotHistory = JSON.parse(helpbotHistoryElement?.textContent || '[]');
+
+  helpbotMessages.innerHTML = '';
+  if (helpbotHistory.length === 0) {
+      helpbotHistory.push({
           role: 'assistant',
           content: 'I can help locate items, summarize quantities, tell you what is in a room, and suggest which inventory items fit a task like 3D printing.'
-      }
-  ];
+      });
+  }
+  helpbotHistory.forEach((entry) => {
+      appendHelpbotMessage(entry.role === 'user' ? 'user' : 'bot', entry.content || '');
+  });
 
   function setHelpbotOpen(isOpen) {
       helpbotPanel.classList.toggle('hidden', !isOpen);
@@ -221,10 +256,17 @@ document.addEventListener('DOMContentLoaded', () => {
                   'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                  message,
-                  history: helpbotHistory
+                  message
               })
           });
+
+          if (response.status === 401) {
+              const result = await response.json().catch(() => ({}));
+              if (result.redirect) {
+                  window.location.href = result.redirect;
+              }
+              return;
+          }
 
           const data = await response.json();
           pendingMessage.textContent = '';
@@ -258,8 +300,13 @@ document.addEventListener('DOMContentLoaded', () => {
               pendingMessage.appendChild(sourceList);
           }
 
-          helpbotHistory.push({ role: 'user', content: message });
-          helpbotHistory.push({ role: 'assistant', content: data.reply || '' });
+          if (Array.isArray(data.history) && data.history.length > 0) {
+              helpbotHistory.length = 0;
+              data.history.forEach((entry) => helpbotHistory.push(entry));
+          } else {
+              helpbotHistory.push({ role: 'user', content: message });
+              helpbotHistory.push({ role: 'assistant', content: data.reply || '' });
+          }
       } catch (error) {
           pendingMessage.textContent = 'The help bot could not reach the inventory right now.';
       }

@@ -90,6 +90,89 @@ body {
 .nav-link:hover {
     color: var(--secondary-color) !important;
 }
+.nav-user-email {
+    color: var(--secondary-color);
+    cursor: default;
+}
+.sign-out-form {
+    margin: 0;
+}
+.sign-out-button {
+    background: transparent;
+    border: 0;
+    padding: 0;
+}
+.auth-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.auth-modal-overlay.visible {
+    display: flex;
+}
+.auth-modal-card {
+    width: min(380px, 100%);
+    background: #f5f5f5;
+    color: var(--dark-color);
+    border-radius: 14px;
+    padding: 1.25rem;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+}
+.auth-modal-card h2 {
+    margin: 0;
+    color: var(--primary-dark);
+    font-size: 1.35rem;
+}
+.auth-modal-card p {
+    margin: 0.5rem 0 0;
+    color: #555;
+}
+.auth-modal-label {
+    display: block;
+    margin-top: 1rem;
+    margin-bottom: 0.4rem;
+    color: var(--primary-dark);
+    font-weight: 600;
+}
+.auth-modal-input {
+    width: 100%;
+    border: 1px solid rgba(50, 113, 74, 0.35);
+    border-radius: 10px;
+    padding: 0.8rem 0.9rem;
+    background: #fff;
+    color: #222;
+}
+.auth-modal-error {
+    min-height: 1.2rem;
+    margin-top: 0.6rem;
+    color: #b34848;
+    font-size: 0.95rem;
+}
+.auth-modal-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+.auth-modal-actions button {
+    border: 0;
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+    font-weight: 700;
+}
+.auth-modal-cancel {
+    background: #d3d3d3;
+    color: #333;
+}
+.auth-modal-submit {
+    background: var(--primary-color);
+    color: var(--dark-color);
+}
 .active {
     color: var(--primary-color) !important;
 }
@@ -253,21 +336,91 @@ p{
     left: 50%;
     transform: translate(-50%, -50%);
     background: white;
+    color: var(--dark-color);
     padding: 20px;
     border-radius: 10px;
-    width: 300px;
+    width: min(840px, calc(100vw - 2rem));
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    text-align: center;
+    text-align: left;
+}
+
+.item-modal-layout {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: stretch;
+}
+
+.item-modal-layout::before {
+    content: '';
+    position: absolute;
+    left: calc(50% - 1.5px);
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: rgba(0, 0, 0, 0.78);
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.item-modal-left,
+.item-modal-right {
+    min-width: 0;
+}
+
+.item-modal-left {
+    padding-right: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: left;
+}
+
+.item-modal-right {
+    position: relative;
+    padding-left: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+}
+
+#itemTitle {
+    color: var(--primary-dark);
+    margin-bottom: 0.75rem;
+    text-align: left;
+    width: 100%;
+}
+
+#itemDetails {
+    color: var(--dark-color);
+    white-space: pre-line;
+    line-height: 1.45;
+    margin-bottom: 0;
+    text-align: left;
+    width: 100%;
 }
 
 .item-modal-image {
     display: none;
-    width: 100%;
+    width: min(100%, 260px);
     max-height: 220px;
     object-fit: contain;
     border-radius: 12px;
     margin-bottom: 14px;
     background: rgba(0, 0, 0, 0.04);
+}
+
+.item-floorplan-image {
+    display: block;
+    width: min(100%, 340px);
+    max-height: 420px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.04);
+    padding: 0.25rem;
+    margin: 0 auto;
 }
 
 .close-button {
@@ -276,14 +429,37 @@ p{
     right: 15px;
     font-size: 20px;
     cursor: pointer;
+    color: var(--dark-color);
 }
 
-.modal-buttons {
-    margin-top: 15px;
-}
+@media (max-width: 768px) {
+    .modal-content {
+        width: min(840px, calc(100vw - 1rem));
+        padding: 16px;
+    }
 
-.modal-buttons .btn {
-    margin: 5px;
+    .item-modal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .item-modal-layout::before {
+        left: 0;
+        right: 0;
+        top: auto;
+        bottom: auto;
+        width: auto;
+        height: 3px;
+        margin-top: calc(100% + 0.5rem);
+    }
+
+    .item-modal-left {
+        padding-right: 0;
+    }
+
+    .item-modal-right {
+        padding-left: 0;
+        padding-top: 1rem;
+    }
 }
 .tips {
     margin: 15px auto;

@@ -27,6 +27,19 @@
     "updated_at": "2026-04-14T16:47:19",
     "validation": {}
   },
+  "Chinese Lucky Waving Cat": {
+    "image_url": "/static/item-images/chinese-lucky-waving-cat-2de91aed64.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-16T10:41:54",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image depicts a traditional Chinese Lucky Waving Cat (Maneki-neko) with the characteristic features such as a raised paw and vibrant colors, suitable for a clean product listing."
+    }
+  },
   "Circular Bandsaw": {
     "image_url": "/static/item-images/circular-bandsaw-eb00687a84.jpg",
     "note": "Resolved from source page image candidates.",
@@ -108,6 +121,19 @@
       "approved": true,
       "confidence": 0.9,
       "reason": "The image shows a clean, centered product photo of an all-in-one desktop computer that matches the style and likely form factor of an IdeaCentre AIO AMD 27\" model in Luna Grey color. The background is plain white, which is typical for retailer/manufacturer product images."
+    }
+  },
+  "Lucky Cat": {
+    "image_url": "/static/item-images/lucky-cat-a77d31f39a.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-15T16:38:31",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image features multiple representations of a Lucky Cat, displaying their iconic design and characteristics. The clean, neutral background and focus on the product align well with the style of a professional product listing."
     }
   },
   "Microscope": {

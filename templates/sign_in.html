@@ -1,0 +1,137 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>BMEnventory Sign In</title>
+    <style>
+        :root {
+            --primary-dark: #32714a;
+            --primary-color: #70ffa7;
+            --secondary-color: #bbffd5;
+            --tertiary-color: rgba(255, 255, 255, 0.2);
+            --tertiary-light: rgba(255, 255, 255, 0.5);
+            --dark-color: #3c3c3c;
+            --light-color: #ffffff;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background: linear-gradient(to bottom, var(--dark-color), #444);
+            color: var(--light-color);
+            font-family: "Segoe UI", Tahoma, sans-serif;
+        }
+
+        .sign-in-card {
+            width: min(420px, 100%);
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--tertiary-color);
+            border-radius: 18px;
+            padding: 1.75rem;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            margin: 0;
+            color: var(--primary-color);
+            font-size: 2rem;
+        }
+
+        p {
+            margin: 0.5rem 0 0;
+            color: var(--tertiary-light);
+            line-height: 1.45;
+        }
+
+        .sign-in-form {
+            margin-top: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+
+        label {
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border-radius: 10px;
+            border: 1px solid var(--secondary-color);
+            background: #f3f3f3;
+            color: #222;
+            font-size: 1rem;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 0.9rem 1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: var(--primary-color);
+            color: var(--dark-color);
+        }
+
+        button:hover {
+            background: var(--secondary-color);
+        }
+
+        .error {
+            min-height: 1.3rem;
+            color: #ffb7b7;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <main class="sign-in-card">
+        <h1>BMEnventory</h1>
+        <p>Enter your email to access the inventory tools. No password or account setup is required.</p>
+        <form class="sign-in-form" id="sign-in-form">
+            <div>
+                <label for="email">Email</label>
+                <input id="email" name="email" type="email" autocomplete="email" placeholder="name@uri.edu" pattern=".+@uri\.edu" required>
+            </div>
+            <div class="error" id="sign-in-error"></div>
+            <button type="submit">Enter Inventory</button>
+        </form>
+    </main>
+
+    <script>
+        (() => {
+            const form = document.getElementById('sign-in-form');
+            const emailInput = document.getElementById('email');
+            const errorBox = document.getElementById('sign-in-error');
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                errorBox.textContent = '';
+
+                const response = await fetch('{{ url_for("sign_in") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailInput.value })
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    errorBox.textContent = result.error || 'Enter a valid @uri.edu email address.';
+                    return;
+                }
+
+                window.location.href = result.redirect || '{{ url_for("home") }}';
+            });
+        })();
+    </script>
+</body>
+</html>

@@ -6,23 +6,31 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='edit.css') }}">
-    <title>BME Inventory Search</title>
+    <title>BMEnventory Search</title>
 </head>
 
 <body>
     <nav class="navbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/">BME Inventory</a>
+            <a class="navbar-brand" href="/">BMEnventory</a>
             <div class="ms-auto">
                 <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/">Search</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/floorplan">Floorplan</a>
+                        <a class="nav-link" href="/floorplan">ItemGuessr</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">🔒</span></a>
+                        <a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a>
+                    </li>
+                    <li class="nav-item nav-user">
+                        <span class="nav-link nav-user-email">{{ signed_in_email }}</span>
+                    </li>
+                    <li class="nav-item nav-sign-out">
+                        <form method="post" action="{{ url_for('sign_out') }}" class="sign-out-form">
+                            <button type="submit" class="nav-link sign-out-button">Sign Out</button>
+                        </form>
                     </li>
                 </ul>
             </div>
@@ -131,25 +139,109 @@
         </div>
     </div>
 
+    <div class="auth-modal-overlay" id="auth-modal" aria-hidden="true">
+        <div class="auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+            <h2 id="auth-modal-title">Database Access</h2>
+            <p>Enter the editor password to open the database page.</p>
+            <label class="auth-modal-label" for="auth-password">Password</label>
+            <input class="auth-modal-input" id="auth-password" type="password" autocomplete="current-password">
+            <div class="auth-modal-error" id="auth-error"></div>
+            <div class="auth-modal-actions">
+                <button type="button" class="auth-modal-cancel" id="auth-cancel">Cancel</button>
+                <button type="button" class="auth-modal-submit" id="auth-submit">Continue</button>
+            </div>
+        </div>
+    </div>
+
   <script src="{{url_for('static', filename='edit.js')}}"></script>
   <script>
     (() => {
+        const authModal = document.getElementById('auth-modal');
+        const authPasswordInput = document.getElementById('auth-password');
+        const authError = document.getElementById('auth-error');
+        const authCancel = document.getElementById('auth-cancel');
+        const authSubmit = document.getElementById('auth-submit');
+
+        function closeAuthModal() {
+            authModal.classList.remove('visible');
+            authModal.setAttribute('aria-hidden', 'true');
+            authPasswordInput.value = '';
+            authError.textContent = '';
+        }
+
+        function openAuthModal() {
+            authModal.classList.add('visible');
+            authModal.setAttribute('aria-hidden', 'false');
+            authPasswordInput.value = '';
+            authError.textContent = '';
+            window.setTimeout(() => authPasswordInput.focus(), 0);
+        }
+
+        async function requestProtectedLinkAuth(link) {
+            openAuthModal();
+
+            return await new Promise((resolve) => {
+                const cleanup = () => {
+                    authSubmit.removeEventListener('click', submitHandler);
+                    authCancel.removeEventListener('click', cancelHandler);
+                    authModal.removeEventListener('click', overlayHandler);
+                    authPasswordInput.removeEventListener('keydown', keyHandler);
+                };
+
+                const cancelHandler = () => {
+                    cleanup();
+                    closeAuthModal();
+                    resolve(null);
+                };
+
+                const overlayHandler = (event) => {
+                    if (event.target === authModal) {
+                        cancelHandler();
+                    }
+                };
+
+                const submitHandler = async () => {
+                    authError.textContent = '';
+                    const response = await fetch(link.dataset.authUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: authPasswordInput.value })
+                    });
+                    if (!response.ok) {
+                        authError.textContent = 'Incorrect password.';
+                        authPasswordInput.select();
+                        return;
+                    }
+                    const result = await response.json();
+                    cleanup();
+                    closeAuthModal();
+                    resolve(result);
+                };
+
+                const keyHandler = (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        submitHandler();
+                    } else if (event.key === 'Escape') {
+                        cancelHandler();
+                    }
+                };
+
+                authSubmit.addEventListener('click', submitHandler);
+                authCancel.addEventListener('click', cancelHandler);
+                authModal.addEventListener('click', overlayHandler);
+                authPasswordInput.addEventListener('keydown', keyHandler);
+            });
+        }
+
         document.querySelectorAll('[data-protected-link]').forEach((link) => {
             link.addEventListener('click', async (event) => {
                 if (link.dataset.authenticated === 'true') return;
                 event.preventDefault();
-                const password = window.prompt('Enter editor password:');
-                if (password === null) return;
-                const response = await fetch(link.dataset.authUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password })
-                });
-                if (!response.ok) {
-                    window.alert('Incorrect password.');
+                const result = await requestProtectedLinkAuth(link);
+                if (!result) {
                     return;
                 }
-                const result = await response.json();
                 window.location.href = result.redirect;
             });
         });

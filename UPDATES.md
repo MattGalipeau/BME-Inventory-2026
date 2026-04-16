@@ -59,6 +59,30 @@ This file tracks the major code and product changes made to the BME Inventory ap
 - Added a `Bin Directory` section inside the database page instead of using a separate `/bins` page.
 - Added sorting for bin directory columns, except `Wall`.
 - Added create/delete bin actions directly from the bin directory.
+- Added a `Reprint Label` button for bins in the bin directory.
+- Fixed help bot inventory replies and filtered result cards so they stay in sync.
+- Added local help bot matching for `power tools` so that reply text and result cards stay synced for that category.
+- Unified the help bot response path so both bot modes now return the same inventory reply text.
+- Restored OpenAI-backed help bot replies while keeping inventory item mentions anchored to the same locally resolved UI result set.
+- Updated the OpenAI help bot to return the exact UPCs it mentions so the filtered UI items can match the chatbot's item discussion.
+- Refactored the help bot into adapter-based backends, defaulting help responses to Ollama while keeping the image agent on OpenAI.
+- Added Ollama-powered semantic item matching for the help bot using `mxbai-embed-large`.
+- Switched the default Ollama help chat model to the lightweight `qwen2.5:0.5b` for faster local responses.
+- Switched the active default help bot backend back to OpenAI so both help and image agents can run without managing local inference hardware.
+- Prevented duplicate top-level search items when the same item name is entered again in a different location by reusing the existing item record.
+- Fixed the search card pop-up so item title and details are visible instead of rendering white text on a white modal background.
+- Expanded the search item pop-up into a two-column layout with the existing item details on the left and a floorplan image on the right.
+- Updated the search item pop-up floorplan image to use the same colored floorplan asset as the floorplan page.
+- Removed the edit/delete buttons from the search item pop-up.
+- Added a subtle aesthetic divider between the left and right halves of the search item pop-up.
+- Added an email-only sign-in screen for accessing the app and a sign-out control available from every main page.
+- Restricted app sign-in to `@uri.edu` email addresses only.
+- Made the help bot conversation persist for the signed-in session, including across page refreshes, until sign-out.
+- Replaced browser password popups for database access with a masked in-page password modal and updated the editor/database password to `MattIsTech!`.
+- Changed database unlock behavior so it stays unlocked for the signed-in session until the user signs out.
+- Updated the database navbar icon to switch from a locked to an unlocked padlock when database access is active in the session.
+- Added user activity tracking for sign-ins and search-page item clicks, plus a new User Tracking panel on the database page.
+- Added sign-out date/time tracking to the user activity log and exposed it in the User Tracking panel.
 - Added live create/delete updates for bins without refresh.
 - Added an image status indicator to the database table:
   - green = image found
@@ -100,6 +124,11 @@ This file tracks the major code and product changes made to the BME Inventory ap
 - Added support for showing room names when no floorplan room is selected and wall names when a room is selected.
 - Improved item and bin management workflows to avoid unnecessary refreshes.
 - Added live status/polling behavior for background image lookup.
+- Added keyboard intent matching so broad help-bot keyboard queries recognize the Royal Kludge item without requiring its exact name.
+- Reworked the floorplan page into a room-guessing game with session-persistent score, attempts, and current item tracking.
+- Persisted floorplan game score and attempts by user email across sign-ins.
+- Renamed the floorplan game page in the UI to `ItemGuessr`.
+- Updated the visible app branding from `BME Inventory` to `BMEnventory`.
 
 ## Notes
 
