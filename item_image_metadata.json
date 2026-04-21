@@ -1,4 +1,179 @@
 {
+  "1/4 Watt 5 kOhm Resistor": {
+    "image_url": "/static/item-images/1-4-watt-5-kohm-resistor-4b96020eea.jpg",
+    "note": "This is a product page for a 5.1\u202fk\u03a9 1/4\u202fW 5% carbon\u2011film resistor (close to 5\u202fk\u03a9) on Circuit Specialists, and it includes a visible product image.",
+    "source_url": "https://www.circuitspecialists.com/ra5.1k",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T19:49:38",
+    "validation": {
+      "approved": true,
+      "confidence": "high",
+      "reason": "The image clearly shows resistors similar to the described item in a clean and professional style suitable for a product listing."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Blue": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-blue-65ed2e8a4b.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T17:59:29",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly depicts a 12mm label tape cassette labeled as 'Black on Blue' with the correct packaging, matching the item description. The product is presented cleanly and professionally, suitable for a retail listing."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Blue (TZc-131)": {
+    "note": "No valid image source was found.",
+    "status": "failed",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:25:21"
+  },
+  "12mm Label Tape Cassette, Black on Clear (TZe)": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-clear-tze-1f0c65ef64.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T18:48:24",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image shows a 12mm label tape cassette that is black on clear, matching the product description. The photo appears clean and is consistent with retailer/manufacturer product-photo styles."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Green": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-green-1d8b6da3b8.jpg",
+    "note": "Official Brother product page for the 12mm Black on Green Laminated Label Tape.",
+    "source_url": "https://www.brother-usa.com/products/tze731cs",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T18:10:06",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly depicts a 12mm label tape cassette with a black on green design. The product is well showcased, with a clean background and clear labeling, making it suitable for a retailer product photo."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Green (TZc-131)": {
+    "note": "No valid image source was found.",
+    "status": "failed",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:17:25"
+  },
+  "12mm Label Tape Cassette, Black on Red": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-red-1547dfd131.png",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T18:10:36",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image shows a 12mm label tape cassette labeled 'Black on Red', matching the requested item with a clean, professional product photo style."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Red (TZc-131)": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-red-1547dfd131.png",
+    "note": "Could not find a replacement image. Kept the current saved image.",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:35:26"
+  },
+  "12mm Label Tape Cassette, Black on Red (TZe)": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-red-tze-3fb04f677a.jpg",
+    "note": "Recovered from non-JSON AI response.",
+    "source_url": "https://www.brother-usa.com/products/tze431g?utm_source=openai",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:46:18",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly depicts a 12mm Label Tape Cassette with a black on red color scheme, matching the description. The product appears clean and well-presented, suitable for a retail listing."
+    }
+  },
+  "12mm Label Tape Cassette, Black on White (TZe)": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-white-tze-323c1faead.jpg",
+    "note": "Product page from CSA Sales showing Brother TZe\u2011231 12\u202fmm black on white laminated label tape; includes visible product image.",
+    "source_url": "https://www.csasales.com/brother-p-touch-12mm-black-on-white-tze231-labelling-tape--1",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T19:55:55",
+    "validation": {
+      "approved": true,
+      "confidence": "high",
+      "reason": "The image clearly shows a package for the '12mm Label Tape Cassette, Black on White (TZe)' with product details and branding. It matches the clean product listing photo style."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Yellow": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-yellow-36204f5473.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T18:13:17",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows a 12mm label tape cassette with a black and yellow color scheme, and it has a clean, professional appearance suitable for a product listing."
+    }
+  },
+  "12mm Label Tape Cassette, Black on Yellow (TZc-131)": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-yellow-36204f5473.jpg",
+    "note": "Could not find a replacement image. Kept the current saved image.",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:36:45"
+  },
+  "12mm Label Tape Cassette, Black on Yellow (TZe)": {
+    "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-yellow-tze-f9c5ab3b90.jpg",
+    "note": "Official Brother product page for the TZeFX631G label tape.",
+    "source_url": "https://www.brother-usa.com/products/TZeFX631G",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:39:07",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly displays a 12mm label tape cassette with a black on yellow design, matching the product description. The photo is clean and fits the style of a product listing."
+    }
+  },
+  "24mm Label Tape Cassette, Black (TZe)": {
+    "note": "No valid image source was found.",
+    "status": "failed",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T19:08:45"
+  },
+  "24mm Label Tape Cassette, Black on White (TZe)": {
+    "image_url": "/static/item-images/24mm-label-tape-cassette-black-on-white-tze-9bc93ecc82.jpg",
+    "note": "Recovered from non-JSON AI response.",
+    "source_url": "https://www.brother-usa.com/products/tzesl251?utm_source=openai",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T19:08:29",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image features a label tape cassette that matches the description of a 24mm tape (Black on White). It displays the product clearly with a clean, professional appearance typical of retailer listings."
+    }
+  },
+  "24mm Label Tape Cassette, White on Black (TZe)": {
+    "image_url": "/static/item-images/24mm-label-tape-cassette-white-on-black-tze-9158a200b0.jpg",
+    "note": "This is a product page on Adorama for Brother TZe\u2011M355 24\u202fmm white\u2011on\u2011premium matte black laminated label tape cassette, with accessible product image, from a reputable retailer (not the manufacturer\u2019s marketing site).",
+    "source_url": "https://www.adorama.com/brtzem355.html",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T20:04:31",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly matches the description of the '24mm Label Tape Cassette, White on Black' (TZe), displaying a clean product listing style typical of manufacturer or retailer displays."
+    }
+  },
   "995D+ Solder Station": {
     "image_url": "/static/item-images/995d-solder-station-391b3daa40.jpg",
     "note": "Seeded from current approved image map.",
@@ -27,6 +202,45 @@
     "updated_at": "2026-04-14T16:47:19",
     "validation": {}
   },
+  "Brother P-Touch Portable Label Printer": {
+    "image_url": "/static/item-images/brother-p-touch-portable-label-printer-bca0561142.jpg",
+    "note": "Official retailer (Target) product page for the Brother P\u2011Touch PT\u2011P300BT Portable (CUBE) Label Maker, with accessible product images, specifications, pricing, and purchase options.",
+    "source_url": "https://www.target.com/p/-/A-92231485",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T20:07:30",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows the Brother P-Touch Portable Label Printer in a clean product-photo style suitable for a retailer listing. The label printer is the main focus, with relevant details and minimal distractions."
+    }
+  },
+  "Brother P-touch PTH110": {
+    "image_url": "/static/item-images/brother-p-touch-pth110-8269d11fdc.jpg",
+    "note": "Official retailer product page (Office Depot) for Brother P\u2011Touch PTH110 with accessible product image and full specifications, not the manufacturer marketing site.",
+    "source_url": "https://www.officedepot.com/a/products/797938678/Brother-P-Touch-Label-Maker-PTH110/",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T20:11:38",
+    "validation": {
+      "approved": true,
+      "confidence": "high",
+      "reason": "The image shows a label printer that resembles the Brother P-touch PTH110, presented in a clean and clear manner suitable for a product listing."
+    }
+  },
+  "Brother P-touch PTH110 Label Maker": {
+    "image_url": "/static/item-images/brother-p-touch-pth110-label-maker-4b5279e704.jpg",
+    "note": "OfficeSupply.com product page for Brother P\u2011Touch PTH110, includes multiple thumbnail images clearly showing the device.",
+    "source_url": "https://www.officesupply.com/office-supplies/labels-labeling-systems/labels/label-printers/brother-touch-label-maker-pth110/p620518.html",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T20:11:41",
+    "validation": {
+      "approved": true,
+      "confidence": "high",
+      "reason": "The image clearly shows the Brother P-touch PTH110 Label Maker in a clean, professional style suitable for retail product listings."
+    }
+  },
   "Chinese Lucky Waving Cat": {
     "image_url": "/static/item-images/chinese-lucky-waving-cat-2de91aed64.jpg",
     "note": "Resolved from source page image candidates.",
@@ -38,6 +252,32 @@
       "approved": true,
       "confidence": 0.95,
       "reason": "The image depicts a traditional Chinese Lucky Waving Cat (Maneki-neko) with the characteristic features such as a raised paw and vibrant colors, suitable for a clean product listing."
+    }
+  },
+  "Chinese Swinging Arm Cat": {
+    "image_url": "/static/item-images/chinese-swinging-arm-cat-b7cf73b82f.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-17T16:18:07",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image depicts a Chinese Swinging Arm Cat, commonly known as a Maneki-neko, with the characteristic features and vibrant colors typical of such products. The image is clean and suitable for a product listing."
+    }
+  },
+  "Chinese Waving Lucky Cat": {
+    "image_url": "/static/item-images/chinese-waving-lucky-cat-87cba57897.jpg",
+    "note": "Official product page with accessible images.",
+    "source_url": "https://myzentemple.com/products/chinese-lucky-waving-cat",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-20T18:34:04",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows a Chinese Waving Lucky Cat with the distinctive features typical of the product, and it maintains a clean and appealing aesthetic suitable for retail."
     }
   },
   "Circular Bandsaw": {
@@ -121,6 +361,19 @@
       "approved": true,
       "confidence": 0.9,
       "reason": "The image shows a clean, centered product photo of an all-in-one desktop computer that matches the style and likely form factor of an IdeaCentre AIO AMD 27\" model in Luna Grey color. The background is plain white, which is typical for retailer/manufacturer product images."
+    }
+  },
+  "Logitech S-00143 Speaker": {
+    "image_url": "/static/item-images/logitech-s-00143-speaker-52f2f1e4b9.jpg",
+    "note": "This is a retailer product page (Cash Converters UK) listing the Logitech S\u201100143 Multimedia Speakers with Subwoofer in black. It includes multiple accessible images of the product and not from the manufacturer\u2019s marketing site, meeting the requirement.",
+    "source_url": "https://www.cashconverters.co.uk/shop/phones-cameras--computers/peripherals--accessories/computer-speakers/computer-speakers/046600091398",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-20T20:14:26",
+    "validation": {
+      "approved": true,
+      "confidence": "high",
+      "reason": "The image shows a set of speakers with a central subwoofer and two satellite speakers, which appears consistent with a typical speaker set like the Logitech S-00143. The photo is clear and focused on the product, matching the clean style desired for product listings."
     }
   },
   "Lucky Cat": {
@@ -261,6 +514,19 @@
     "status": "failed",
     "trigger": "new_item_create",
     "updated_at": "2026-04-14T20:17:08"
+  },
+  "Swinging Arm Chinese Lucky Cat": {
+    "image_url": "/static/item-images/swinging-arm-chinese-lucky-cat-b7cf73b82f.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-17T15:07:13",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image clearly shows a black Lucky Cat with a swinging arm, matching the description closely. It is presented in a clean and appealing style suitable for a product listing."
+    }
   },
   "Tabletop Band Saw": {
     "image_url": "/static/item-images/tabletop-band-saw-57ff044d7e.jpg",

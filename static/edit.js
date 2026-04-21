@@ -1,8 +1,71 @@
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('item_name');
     const resultContainer = document.getElementById('dropdown-results');
+    const newEntryModalElement = document.getElementById('newEntryModal');
+    const previewCard = document.getElementById('existing-item-preview');
+    const previewImage = document.getElementById('existing-item-preview-image');
+    const previewTitle = document.getElementById('existing-item-preview-title');
+    const previewQty = document.getElementById('existing-item-preview-qty');
+    const previewLocations = document.getElementById('existing-item-preview-locations');
 
     let activeIndex = -1;
+    let latestResults = [];
+
+    function normalizeText(value) {
+        return (value || '').trim().toLowerCase();
+    }
+
+    function hidePreview() {
+        if (!previewCard) return;
+        previewCard.classList.add('d-none');
+        if (previewImage) {
+            previewImage.src = '';
+            previewImage.alt = 'Existing item image';
+        }
+    }
+
+    window.resetNewEntryExistingItemPreview = () => {
+        latestResults = [];
+        resultContainer.innerHTML = '';
+        resultContainer.style.display = 'none';
+        hidePreview();
+    };
+
+    function showPreview(item) {
+        if (!previewCard || !item) return;
+
+        const locations = item.LocationDetails || item.WallNames || item.Rooms || 'Unknown';
+        previewTitle.textContent = item.Name || 'Existing item';
+        previewQty.textContent = `Total Quantity: ${item.TotalQty ?? 'Unknown'}`;
+        previewLocations.textContent = `Locations: ${locations}`;
+        if (previewImage) {
+            previewImage.src = item.Thumbnail || '';
+            previewImage.alt = `${item.Name || 'Existing item'} image`;
+        }
+        previewCard.classList.remove('d-none');
+    }
+
+    function findBestExistingMatch(results, query) {
+        const normalizedQuery = normalizeText(query);
+        if (!normalizedQuery || !Array.isArray(results) || !results.length) {
+            return null;
+        }
+
+        return (
+            results.find((result) => normalizeText(result.Name) === normalizedQuery) ||
+            results.find((result) => normalizeText(result.Name).startsWith(normalizedQuery)) ||
+            results[0]
+        );
+    }
+
+    function syncPreview(query) {
+        const match = findBestExistingMatch(latestResults, query);
+        if (match) {
+            showPreview(match);
+        } else {
+            hidePreview();
+        }
+    }
 
     function highlightItem(index) {
         const items = resultContainer.querySelectorAll('.result-item');
@@ -16,8 +79,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (query) {
             performSearch(query);
         } else {
+            latestResults = [];
             resultContainer.innerHTML = '';
             resultContainer.style.display = 'none';
+            hidePreview();
         }
     });
 
@@ -38,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeIndex >= 0 && activeIndex < items.length) {
                 searchInput.value = items[activeIndex].textContent;
                 resultContainer.style.display = 'none';
+                syncPreview(searchInput.value);
                 activeIndex = -1;
             }
         }
@@ -47,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target.classList.contains('result-item')) {
             searchInput.value = event.target.textContent;
             resultContainer.style.display = 'none';
+            syncPreview(searchInput.value);
         }
     });
 
@@ -55,12 +122,19 @@ document.addEventListener('DOMContentLoaded', () => {
             resultContainer.style.display = 'none';
         }
     });
+
+    if (newEntryModalElement) {
+        newEntryModalElement.addEventListener('hidden.bs.modal', () => {
+            window.resetNewEntryExistingItemPreview?.();
+        });
+    }
     function displayResults(results, query) {
+        latestResults = Array.isArray(results) ? results : [];
         resultContainer.innerHTML = '';
         resultContainer.style.display = 'block';
     
-        if (results.length > 0) {
-            results.forEach((result, index) => {
+        if (latestResults.length > 0) {
+            latestResults.forEach((result, index) => {
                 const resultDiv = document.createElement('div');
                 resultDiv.classList.add('result-item');
                 resultDiv.textContent = result.Name;
@@ -70,11 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             activeIndex = 0; // Highlight the first item initially
             highlightItem(activeIndex);
+            syncPreview(query);
         } else {
             const noResultsDiv = document.createElement('div');
             noResultsDiv.classList.add('no-results');
             noResultsDiv.textContent = `Create new item called "${query}"`;
             resultContainer.appendChild(noResultsDiv);
+            hidePreview();
         }
     }
     
@@ -119,6 +195,7 @@ async function submitForm() {
             // Clear specific fields
             document.getElementById('item_name').value = '';
             document.getElementById('quantity').value = '';
+            window.resetNewEntryExistingItemPreview?.();
 
             // Optional: Handle server response (e.g., show a success message)
             console.log('Item added successfully!');

@@ -15,7 +15,7 @@ import ssl
 import urllib.request
 import urllib.error
 from html import unescape
-from urllib.parse import urlparse, quote_plus
+from urllib.parse import urlparse, quote_plus, urljoin, unquote
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import functions
@@ -59,8 +59,8 @@ HELP_BOT_BACKEND = os.getenv("HELP_BOT_BACKEND", "openai").strip().lower()
 HELP_BOT_MODEL = os.getenv("HELP_BOT_MODEL", "gpt-4o-mini")
 HELP_BOT_OLLAMA_BASE_URL = os.getenv("HELP_BOT_OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 HELP_BOT_EMBED_MODEL = os.getenv("HELP_BOT_EMBED_MODEL", "mxbai-embed-large")
-IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4o-mini")
-IMAGE_AGENT_PAGE_ATTEMPTS = int(os.getenv("IMAGE_AGENT_PAGE_ATTEMPTS", "2"))
+IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4o")
+IMAGE_AGENT_PAGE_ATTEMPTS = int(os.getenv("IMAGE_AGENT_PAGE_ATTEMPTS", "4"))
 IMAGE_AGENT_MAX_VALIDATIONS = int(os.getenv("IMAGE_AGENT_MAX_VALIDATIONS", "2"))
 IMAGE_AGENT_AI_SEARCH_FALLBACK = os.getenv("IMAGE_AGENT_AI_SEARCH_FALLBACK", "false").lower() == "true"
 ITEM_IMAGES_FILE = "item_images.json"
@@ -69,6 +69,7 @@ ITEM_IMAGE_CACHE_DIR = os.path.join("static", "item-images")
 _help_bot_backend = None
 _image_agent_client = None
 _item_images_lock = threading.Lock()
+_item_image_cancelled = set()
 
 IMAGE_STATUS_PENDING = "pending"
 IMAGE_STATUS_SUCCESS = "success"
@@ -561,26 +562,80 @@ def load_item_image_metadata():
 def normalize_item_image_key(item_name):
     return (item_name or "").strip()
 
+def iter_item_image_key_variants(item_name):
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return []
+
+    variants = []
+    seen = set()
+
+    def add_variant(value):
+        cleaned = " ".join((value or "").split()).strip()
+        if not cleaned:
+            return
+        lowered = cleaned.lower()
+        if lowered in seen:
+            return
+        seen.add(lowered)
+        variants.append(cleaned)
+
+    add_variant(normalized_name)
+    add_variant(re.sub(r"\s*\([^)]*\)", "", normalized_name))
+    add_variant(re.sub(r"\s*[-–]\s*[^-–]+$", "", normalized_name))
+
+    return variants
+
+def find_item_image_map_match(image_map, item_name):
+    for variant in iter_item_image_key_variants(item_name):
+        if variant in image_map:
+            return variant, image_map[variant]
+
+    lowered_map = {
+        " ".join((key or "").split()).strip().lower(): (key, value)
+        for key, value in image_map.items()
+    }
+    for variant in iter_item_image_key_variants(item_name):
+        match = lowered_map.get(variant.lower())
+        if match:
+            return match
+
+    return None, None
+
+def find_item_image_metadata_match(metadata_map, item_name):
+    for variant in iter_item_image_key_variants(item_name):
+        metadata = metadata_map.get(variant)
+        if isinstance(metadata, dict):
+            return variant, metadata
+
+    lowered_metadata = {
+        " ".join((key or "").split()).strip().lower(): (key, value)
+        for key, value in metadata_map.items()
+        if isinstance(value, dict)
+    }
+    for variant in iter_item_image_key_variants(item_name):
+        match = lowered_metadata.get(variant.lower())
+        if match:
+            return match
+
+    return None, None
+
 def get_item_image_status(item_name):
     normalized_name = normalize_item_image_key(item_name)
     if not normalized_name:
         return IMAGE_STATUS_FAILED
 
-    image_map = load_item_image_map()
-    if normalized_name in image_map:
-        return IMAGE_STATUS_SUCCESS
-
-    for key in image_map.keys():
-        if key.strip() == normalized_name:
-            return IMAGE_STATUS_SUCCESS
-
     metadata_map = load_item_image_metadata()
-    metadata = metadata_map.get(normalized_name)
-    if not metadata:
-        for key, value in metadata_map.items():
-            if key.strip() == normalized_name:
-                metadata = value
-                break
+    _, metadata = find_item_image_metadata_match(metadata_map, normalized_name)
+    if isinstance(metadata, dict):
+        status = (metadata.get("status") or "").strip().lower()
+        if status == IMAGE_STATUS_PENDING:
+            return IMAGE_STATUS_PENDING
+
+    image_map = load_item_image_map()
+    matched_key, _ = find_item_image_map_match(image_map, normalized_name)
+    if matched_key:
+        return IMAGE_STATUS_SUCCESS
 
     if isinstance(metadata, dict):
         status = (metadata.get("status") or "").strip().lower()
@@ -611,6 +666,27 @@ def set_item_image_status(item_name, status, **extra_fields):
         metadata_map[normalized_name] = existing
         save_item_image_metadata(metadata_map)
 
+def clear_item_image_cancel(item_name):
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return
+    with _item_images_lock:
+        _item_image_cancelled.discard(normalized_name)
+
+def cancel_item_image_lookup(item_name):
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return
+    with _item_images_lock:
+        _item_image_cancelled.add(normalized_name)
+
+def is_item_image_lookup_cancelled(item_name):
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return False
+    with _item_images_lock:
+        return normalized_name in _item_image_cancelled
+
 def save_item_image_metadata(metadata_map):
     payload = dict(metadata_map)
     try:
@@ -619,15 +695,52 @@ def save_item_image_metadata(metadata_map):
     except OSError as exc:
         print("Could not save item image metadata:", exc)
 
-def get_item_image_url(item_name):
-    image_map = load_item_image_map()
-    normalized_name = (item_name or "").strip()
-    if normalized_name in image_map:
-        return image_map[normalized_name]
+def remove_exact_item_image_state(item_name, delete_cached_file=True):
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return
 
-    for key, value in image_map.items():
-        if key.strip() == normalized_name:
-            return value
+    with _item_images_lock:
+        image_map = load_item_image_map()
+        metadata_map = load_item_image_metadata()
+
+        image_url = image_map.pop(normalized_name, None)
+        metadata_map.pop(normalized_name, None)
+
+        save_item_image_map(image_map)
+        save_item_image_metadata(metadata_map)
+
+    if not delete_cached_file or not isinstance(image_url, str):
+        return
+
+    if not image_url.startswith("/static/item-images/"):
+        return
+
+    remaining_map = load_item_image_map()
+    if image_url in remaining_map.values():
+        return
+
+    relative_path = image_url.lstrip("/").replace("/", os.sep)
+    file_path = os.path.join(app.root_path, relative_path)
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except OSError as exc:
+        print(f"Could not remove cached image for {normalized_name}: {exc}")
+
+def get_item_image_url(item_name):
+    normalized_name = normalize_item_image_key(item_name)
+    metadata_map = load_item_image_metadata()
+    exact_metadata = metadata_map.get(normalized_name)
+    if isinstance(exact_metadata, dict):
+        status = (exact_metadata.get("status") or "").strip().lower()
+        if status == IMAGE_STATUS_PENDING:
+            return build_item_thumbnail_data_uri(item_name)
+
+    image_map = load_item_image_map()
+    _, matched_url = find_item_image_map_match(image_map, normalized_name)
+    if matched_url:
+        return matched_url
 
     return build_item_thumbnail_data_uri(item_name)
 
@@ -664,6 +777,44 @@ def load_recently_changed_items(limit=5):
 
     for item in items:
         item["Thumbnail"] = get_item_image_url(item["Name"])
+
+    return items
+
+def load_sign_in_showcase_items(limit=12):
+    image_map = load_item_image_map()
+    if not image_map:
+        return []
+
+    db = get_db()
+    cursor = db.cursor()
+    items = []
+    try:
+        cursor.execute("""
+            SELECT
+                i.Name,
+                i.TotalQty,
+                MAX(datetime(ib.Date || ' ' || ib.Time)) AS LastChanged
+            FROM items i
+            LEFT JOIN item_bin ib ON ib.UPC = i.UPC
+            GROUP BY i.UPC, i.Name, i.TotalQty
+            ORDER BY LastChanged DESC, i.Name
+        """)
+
+        for row in cursor.fetchall():
+            image_url = get_item_image_url(row["Name"])
+            if not image_url or image_url.startswith("data:image/svg+xml"):
+                continue
+            items.append({
+                "Name": row["Name"],
+                "TotalQty": row["TotalQty"],
+                "ImageUrl": image_url,
+            })
+            if len(items) >= limit:
+                break
+    except sqlite3.Error as e:
+        print("An error occurred while loading sign-in showcase items:", e.args[0])
+    finally:
+        db.close()
 
     return items
 
@@ -1649,42 +1800,111 @@ def extract_urls_from_text(text):
 def build_image_validation_instructions():
     return (
         "Decide if an image is a good product photo for the named item. "
-        "Approve only if it matches the item or a very close product-family match and looks like a clean product listing photo. "
+        "Approve only if it clearly matches the item or a very close product-family match and looks like a clean product listing photo. "
+        "Reject logos, icons, banners, website branding, screenshots, memes, diagrams, text-only graphics, unrelated objects, and pages where the product is not the main subject. "
         "Return JSON only with keys approved, confidence, reason."
     )
+
+def is_blocked_image_candidate_url(image_url):
+    lowered = (image_url or "").strip().lower()
+    if not lowered:
+        return True
+
+    blocked_markers = (
+        "storage.live.com/users/0x{0}/myprofile/expressionprofile/profilephoto",
+        "schemas.live.com/web/",
+        "profilephoto:usertile",
+        "avatar",
+        "gravatar",
+    )
+    return any(marker in lowered for marker in blocked_markers)
+
+def is_low_value_image_candidate_url(image_url):
+    lowered = (image_url or "").strip().lower()
+    if not lowered:
+        return True
+
+    low_value_markers = (
+        "favicon",
+        "site-logo",
+        "logo",
+        "icon",
+        "banner",
+        "brandmark",
+        "wordmark",
+        "header",
+        "footer",
+        "nav",
+        "sprite",
+        "placeholder",
+        "blank.gif",
+        "1x1",
+    )
+    return any(marker in lowered for marker in low_value_markers)
+
+def is_sane_public_http_url(candidate_url):
+    candidate_url = (candidate_url or "").strip()
+    if not candidate_url.startswith(("http://", "https://")):
+        return False
+
+    try:
+        parsed = urlparse(candidate_url)
+    except Exception:
+        return False
+
+    host = (parsed.netloc or "").lower()
+    if not host or "{" in host or "}" in host:
+        return False
+    if "." not in host:
+        return False
+    if host.endswith("-") or host.startswith("-"):
+        return False
+    if re.fullmatch(r"[a-z]{24,}", host):
+        return False
+
+    return True
 
 def validate_item_image_via_ai(item_name, image_url, image_bytes=None, content_type=None):
     client = get_image_agent_client()
     if client is None or (not image_url and not image_bytes):
         return None
 
+    if content_type:
+        normalized_type = content_type.split(";")[0].strip().lower()
+        if normalized_type not in {"image/jpeg", "image/png", "image/gif", "image/webp"}:
+            return None
+
     image_input = image_url
     if image_bytes and content_type:
         encoded = base64.b64encode(image_bytes).decode("ascii")
         image_input = f"data:{content_type.split(';')[0]};base64,{encoded}"
 
-    response = client.responses.create(
-        model=IMAGE_AGENT_MODEL,
-        instructions=build_image_validation_instructions(),
-        input=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": (
-                            f'Is this a good product image for {json.dumps(item_name)}? '
-                            "Check whether it actually looks like the item and whether it matches the desired clean retailer/manufacturer product-photo style."
-                        ),
-                    },
-                    {
-                        "type": "input_image",
-                        "image_url": image_input,
-                    },
-                ],
-            }
-        ],
-    )
+    try:
+        response = client.responses.create(
+            model=IMAGE_AGENT_MODEL,
+            instructions=build_image_validation_instructions(),
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                f'Is this a good product image for {json.dumps(item_name)}? '
+                                "Check whether it actually looks like the item and whether it matches the desired clean retailer/manufacturer product-photo style."
+                            ),
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": image_input,
+                        },
+                    ],
+                }
+            ],
+        )
+    except Exception as exc:
+        print(f"Image validator failed for {item_name}: {exc}")
+        return None
 
     parsed = parse_json_object_from_text(response.output_text)
     if not parsed:
@@ -1700,6 +1920,12 @@ def validate_item_image_via_ai(item_name, image_url, image_bytes=None, content_t
 def is_live_image_url(image_url):
     if not image_url:
         return False, "Missing image URL"
+    if is_blocked_image_candidate_url(image_url):
+        return False, "Blocked non-product image URL"
+    if is_low_value_image_candidate_url(image_url):
+        return False, "Low-value image candidate URL"
+    if not is_sane_public_http_url(image_url):
+        return False, "Invalid candidate URL"
 
     request = urllib.request.Request(
         image_url,
@@ -1728,6 +1954,12 @@ def make_item_image_slug(item_name):
 
 def download_image_bytes(image_url, source_url=""):
     if not image_url:
+        return None, None
+    if is_blocked_image_candidate_url(image_url):
+        return None, None
+    if is_low_value_image_candidate_url(image_url):
+        return None, None
+    if not is_sane_public_http_url(image_url):
         return None, None
 
     headers = {
@@ -1776,7 +2008,11 @@ def extract_image_candidates_from_page(page_url):
     if not page_url:
         return []
 
-    parsed = urlparse(page_url)
+    try:
+        parsed = urlparse(page_url)
+    except Exception:
+        return []
+
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").lower()
     if (
@@ -1821,29 +2057,86 @@ def extract_image_candidates_from_page(page_url):
         print(f"Could not inspect image source page {page_url}: {exc}")
         return []
 
-    patterns = [
-        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
-        r'https?://[^"\'\s>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s>]*)?',
-    ]
-
     candidates = []
     seen = set()
+
+    def add_candidate(raw_value):
+        candidate = unescape((raw_value or "").strip())
+        if not candidate:
+            return
+
+        if "," in candidate and " " in candidate:
+            for srcset_part in candidate.split(","):
+                add_candidate(srcset_part.strip().split(" ")[0])
+            return
+
+        if candidate.startswith("//"):
+            candidate = f"{parsed.scheme or 'https'}:{candidate}"
+        elif candidate.startswith("/"):
+            candidate = urljoin(page_url, candidate)
+
+        if not candidate.startswith("http"):
+            return
+        if is_blocked_image_candidate_url(candidate):
+            return
+        if is_low_value_image_candidate_url(candidate):
+            return
+        if not is_sane_public_http_url(candidate):
+            return
+
+        lowered = candidate.lower()
+        if any(marker in lowered for marker in ("sprite", "spacer", "placeholder", "blank.gif", "1x1")):
+            return
+
+        if candidate in seen:
+            return
+        seen.add(candidate)
+        candidates.append(candidate)
+
+    patterns = [
+        r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<img[^>]+src=["\']([^"\']+)["\']',
+        r'<img[^>]+data-src=["\']([^"\']+)["\']',
+        r'<img[^>]+data-lazy-src=["\']([^"\']+)["\']',
+        r'<img[^>]+data-image=["\']([^"\']+)["\']',
+        r'<img[^>]+srcset=["\']([^"\']+)["\']',
+        r'"image"\s*:\s*"([^"]+)"',
+        r'"image_url"\s*:\s*"([^"]+)"',
+        r'"primaryImage"\s*:\s*"([^"]+)"',
+        r'"largeImage"\s*:\s*"([^"]+)"',
+        r'https?://[^"\'\s>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s>]*)?',
+        r'//[^"\'\s>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s>]*)?',
+        r'/[^"\'\s>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s>]*)?',
+    ]
+
     for pattern in patterns:
         for match in re.findall(pattern, html, flags=re.I):
-            candidate = unescape(match if isinstance(match, str) else match[0]).strip()
-            if not candidate.startswith("http"):
-                continue
-            if candidate in seen:
-                continue
-            seen.add(candidate)
-            candidates.append(candidate)
+            if isinstance(match, tuple):
+                for value in match:
+                    add_candidate(value)
+            else:
+                add_candidate(match)
 
     return candidates
 
 def build_item_search_tokens(item_name):
     cleaned = re.sub(r"[^a-z0-9]+", " ", (item_name or "").lower())
     return [token for token in cleaned.split() if len(token) >= 2]
+
+def is_component_like_item(item_name):
+    text = (item_name or "").lower()
+    component_markers = (
+        "resistor", "capacitor", "inductor", "diode", "transistor", "op amp", "ic",
+        "integrated circuit", "breadboard", "jumper", "potentiometer", "relay",
+        "mosfet", "led", "switch", "sensor", "connector", "header", "wire"
+    )
+    return any(marker in text for marker in component_markers)
+
+def is_supply_like_item(item_name):
+    text = (item_name or "").lower()
+    supply_markers = ("label", "tape", "cassette", "sharpie", "marker", "bin", "drawer")
+    return any(marker in text for marker in supply_markers)
 
 def score_image_candidate(item_name, candidate_url):
     url = (candidate_url or "").lower()
@@ -1883,22 +2176,42 @@ def rank_image_candidates(item_name, candidates):
     )
 
 def try_image_candidates(item_name, source_url, candidates):
+    first_viable_result = None
     validations_used = 0
+    has_image_agent = get_image_agent_client() is not None
     for candidate_url in rank_image_candidates(item_name, candidates):
         image_bytes = None
         content_type = None
         live_ok, _ = is_live_image_url(candidate_url)
+        try:
+            image_bytes, content_type = download_image_bytes(candidate_url, source_url)
+            live_ok = bool(image_bytes and content_type and content_type.startswith("image/"))
+        except Exception:
+            live_ok = False
+            image_bytes = None
+            content_type = None
+
         if not live_ok:
-            try:
-                image_bytes, content_type = download_image_bytes(candidate_url, source_url)
-                live_ok = bool(image_bytes and content_type and content_type.startswith("image/"))
-            except Exception:
-                live_ok = False
-            if not live_ok:
-                continue
+            continue
+
+        normalized_type = (content_type or "").split(";")[0].strip().lower()
+        if source_url and first_viable_result is None:
+            first_viable_result = {
+                "image_url": candidate_url,
+                "source_url": source_url or "",
+                "note": "Used the first real downloadable product-page image candidate.",
+                "validation": {
+                    "approved": True,
+                    "confidence": 0.25,
+                    "reason": "Fallback acceptance: product-page candidate downloaded successfully as an image.",
+                },
+            }
+
+        if normalized_type not in {"image/jpeg", "image/png", "image/gif", "image/webp"}:
+            continue
 
         if validations_used >= IMAGE_AGENT_MAX_VALIDATIONS:
-            break
+            continue
 
         validation = validate_item_image_via_ai(
             item_name,
@@ -1915,6 +2228,79 @@ def try_image_candidates(item_name, source_url, candidates):
                 "validation": validation,
             }
 
+    if not has_image_agent:
+        return first_viable_result
+
+    return None
+
+def find_first_shopping_page_image(item_name, excluded_hosts=None):
+    retailer_source_urls = search_product_pages(
+        item_name,
+        retailer_only=True,
+        excluded_hosts=excluded_hosts,
+        limit=max(IMAGE_AGENT_PAGE_ATTEMPTS * 4, 10),
+    )
+
+    for source_url in retailer_source_urls:
+        source_candidates = extract_image_candidates_from_page(source_url)
+        if not source_candidates:
+            continue
+
+        for candidate_url in rank_image_candidates(item_name, source_candidates):
+            live_ok, _ = is_live_image_url(candidate_url)
+            if not live_ok:
+                try:
+                    image_bytes, content_type = download_image_bytes(candidate_url, source_url)
+                    live_ok = bool(image_bytes and content_type and content_type.startswith("image/"))
+                except Exception:
+                    live_ok = False
+
+            if live_ok:
+                return {
+                    "image_url": candidate_url,
+                    "source_url": source_url,
+                    "note": "Used the first live image from a retailer product page as a final fallback.",
+                    "validation": {
+                        "approved": True,
+                        "confidence": 0.3,
+                        "reason": "Final fallback: first live retailer product image used before failing.",
+                    },
+                }
+
+    return None
+
+def find_first_live_web_image(item_name, excluded_hosts=None):
+    excluded_hosts = {host for host in (excluded_hosts or []) if host}
+    web_image_candidates = search_image_candidates_from_web(
+        item_name,
+        limit=max(IMAGE_AGENT_MAX_VALIDATIONS * 4, 16),
+    )
+
+    for candidate_url in rank_image_candidates(item_name, web_image_candidates):
+        host = get_url_host(candidate_url)
+        if host in excluded_hosts:
+            continue
+
+        live_ok, _ = is_live_image_url(candidate_url)
+        if not live_ok:
+            try:
+                image_bytes, content_type = download_image_bytes(candidate_url, "")
+                live_ok = bool(image_bytes and content_type and content_type.startswith("image/"))
+            except Exception:
+                live_ok = False
+
+        if live_ok:
+            return {
+                "image_url": candidate_url,
+                "source_url": "",
+                "note": "Used the first live direct web image result as the final fallback.",
+                "validation": {
+                    "approved": True,
+                    "confidence": 0.2,
+                    "reason": "Final fallback: first live direct web image used before failing.",
+                },
+            }
+
     return None
 
 def get_url_host(url):
@@ -1927,7 +2313,11 @@ def is_unusable_source_page(url):
     if not url:
         return True
 
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return True
+
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").lower()
 
@@ -1968,6 +2358,13 @@ def score_source_page(item_name, url, retailer_only=False):
     if retailer_only and any(marker in url_text for marker in ("shop", "store", "buy", "walmart", "staples", "office", "bestbuy", "target", "bhphotovideo", "adorama")):
         score += 2
 
+    if "uline.com" in url_text and is_supply_like_item(item_name):
+        score += 8
+
+    component_hosts = ("digikey.", "mouser.", "newark.", "arrow.", "sparkfun.", "adafruit.", "rs-online.", "masterelectronics.")
+    if any(host in url_text for host in component_hosts) and is_component_like_item(item_name):
+        score += 10
+
     bad_markers = ("support", "manual", "datasheet", "spec", "pdf", "forum", "community", "article", "blog")
     for marker in bad_markers:
         if marker in url_text:
@@ -1995,6 +2392,20 @@ def search_product_pages(item_name, retailer_only=False, excluded_hosts=None, li
             f'site:cvs.com "{item_name}"',
             f'site:walgreens.com "{item_name}"',
         ])
+        if is_supply_like_item(item_name):
+            queries.extend([
+                f'site:uline.com "{item_name}"',
+                f'site:quill.com "{item_name}"',
+            ])
+        if is_component_like_item(item_name):
+            queries.extend([
+                f'site:digikey.com "{item_name}"',
+                f'site:mouser.com "{item_name}"',
+                f'site:newark.com "{item_name}"',
+                f'site:arrow.com "{item_name}"',
+                f'site:sparkfun.com "{item_name}"',
+                f'site:adafruit.com "{item_name}"',
+            ])
     else:
         queries.extend([
             f'"{item_name}" store',
@@ -2003,6 +2414,29 @@ def search_product_pages(item_name, retailer_only=False, excluded_hosts=None, li
 
     found_urls = []
     seen = set()
+
+    def add_candidate_url(candidate):
+        candidate = unescape((candidate or "").strip())
+        if not candidate:
+            return
+
+        if "://" not in candidate and "%2f" in candidate.lower():
+            candidate = unquote(candidate)
+
+        if candidate.startswith("//"):
+            candidate = "https:" + candidate
+
+        if not candidate.startswith("http"):
+            return
+        if not is_sane_public_http_url(candidate):
+            return
+
+        host = get_url_host(candidate)
+        if candidate in seen or host in excluded_hosts or is_unusable_source_page(candidate):
+            return
+
+        seen.add(candidate)
+        found_urls.append(candidate)
 
     for query in queries:
         search_url = f"https://www.bing.com/search?q={quote_plus(query)}"
@@ -2020,13 +2454,21 @@ def search_product_pages(item_name, retailer_only=False, excluded_hosts=None, li
         except Exception:
             continue
 
-        candidates = re.findall(r'href=["\'](https?://[^"\']+)["\']', html, flags=re.I)
-        for candidate in candidates:
-            host = get_url_host(candidate)
-            if candidate in seen or host in excluded_hosts or is_unusable_source_page(candidate):
-                continue
-            seen.add(candidate)
-            found_urls.append(candidate)
+        patterns = [
+            r'href=["\'](https?://[^"\']+)["\']',
+            r'"url"\s*:\s*"(https?:\\/\\/[^"]+)"',
+            r'"contentUrl"\s*:\s*"(https?:\\/\\/[^"]+)"',
+            r'((?:https?:)?//[^"\'\s<>]+)',
+            r'(https?%3A%2F%2F[^"\'\s<>]+)',
+        ]
+
+        for pattern in patterns:
+            for candidate in re.findall(pattern, html, flags=re.I):
+                if isinstance(candidate, tuple):
+                    for value in candidate:
+                        add_candidate_url(value.replace("\\/", "/"))
+                else:
+                    add_candidate_url(candidate.replace("\\/", "/"))
 
     ranked = sorted(
         found_urls,
@@ -2070,6 +2512,10 @@ def search_image_candidates_from_web(item_name, limit=12):
             for candidate in re.findall(pattern, html, flags=re.I):
                 candidate = unescape(candidate).replace("\\/", "/").strip()
                 if not candidate.startswith("http"):
+                    continue
+                if is_blocked_image_candidate_url(candidate):
+                    continue
+                if not is_sane_public_http_url(candidate):
                     continue
                 if candidate in seen:
                     continue
@@ -2195,14 +2641,67 @@ def find_direct_image_via_ai(item_name, feedback="", excluded_hosts=None):
 
     return None
 
-def find_item_image_via_ai(item_name):
-    rejected_hosts = set()
+def find_item_image_via_ai(item_name, excluded_hosts=None):
+    rejected_hosts = set(excluded_hosts or [])
     code_search_found_any_sources = False
+    image_agent_available = get_image_agent_client() is not None
+
+    if image_agent_available:
+        ai_attempts = max(IMAGE_AGENT_PAGE_ATTEMPTS + 1, 4)
+        for retailer_only in (True, False):
+            direct_feedback = ""
+            page_feedback = ""
+            for _ in range(ai_attempts):
+                direct_result = find_direct_image_via_ai(
+                    item_name,
+                    feedback=direct_feedback,
+                    excluded_hosts=rejected_hosts,
+                )
+                if direct_result and direct_result.get("image_url"):
+                    resolved = try_image_candidates(
+                        item_name,
+                        direct_result.get("source_url", ""),
+                        [direct_result["image_url"]],
+                    )
+                    if resolved:
+                        resolved["note"] = direct_result.get("note", "") or "Resolved from AI direct image search."
+                        return resolved
+                    direct_feedback = (
+                        "That image was wrong, low quality, or not a usable product image. "
+                        "Return a different direct image URL from a retailer or distributor product listing."
+                    )
+
+                page_result = find_product_page_via_ai(
+                    item_name,
+                    retailer_only=retailer_only,
+                    feedback=page_feedback,
+                    excluded_hosts=rejected_hosts,
+                )
+                source_url = (page_result or {}).get("source_url", "")
+                if source_url:
+                    source_candidates = extract_image_candidates_from_page(source_url)
+                    if source_candidates:
+                        resolved = try_image_candidates(item_name, source_url, source_candidates)
+                        if resolved:
+                            resolved["note"] = (
+                                page_result.get("note", "") if page_result else resolved.get("note", "")
+                            ) or "Resolved from AI product page search."
+                            return resolved
+                    rejected_hosts.add(get_url_host(source_url))
+
+                page_feedback = (
+                    "The previous page was wrong or did not expose a usable product image. "
+                    "Return a different retailer, distributor, or storefront product page with a visible product image."
+                )
 
     web_image_candidates = search_image_candidates_from_web(
         item_name,
         limit=max(IMAGE_AGENT_MAX_VALIDATIONS * 3, 8),
     )
+    web_image_candidates = [
+        candidate for candidate in web_image_candidates
+        if get_url_host(candidate) not in rejected_hosts
+    ]
     if web_image_candidates:
         resolved = try_image_candidates(item_name, "", web_image_candidates)
         if resolved:
@@ -2255,7 +2754,7 @@ def find_item_image_via_ai(item_name):
 
                 rejected_hosts.add(get_url_host(source_url))
 
-        should_use_ai_fallback = IMAGE_AGENT_AI_SEARCH_FALLBACK or not code_search_found_any_sources
+        should_use_ai_fallback = (IMAGE_AGENT_AI_SEARCH_FALLBACK or not code_search_found_any_sources) and image_agent_available
         if should_use_ai_fallback:
             feedback = ""
             fallback_attempts = 1 if not code_search_found_any_sources else IMAGE_AGENT_PAGE_ATTEMPTS
@@ -2322,6 +2821,14 @@ def find_item_image_via_ai(item_name):
                     "That source produced unusable or incorrect images. "
                     "Return a different retailer or official storefront product page."
                 )
+
+    final_fallback = find_first_shopping_page_image(item_name, excluded_hosts=rejected_hosts)
+    if final_fallback:
+        return final_fallback
+
+    direct_web_fallback = find_first_live_web_image(item_name, excluded_hosts=rejected_hosts)
+    if direct_web_fallback:
+        return direct_web_fallback
 
     return None
 
@@ -2432,15 +2939,16 @@ def ensure_item_image(item_name, trigger="new_item_create"):
     queue_item_image_lookup(item_name, trigger=f"{trigger}_fallback")
     return False
 
-def queue_item_image_lookup(item_name, trigger="new_item_create"):
+def queue_item_image_lookup(item_name, trigger="new_item_create", force=False, excluded_hosts=None):
     item_name = (item_name or "").strip()
     if not item_name:
         return
 
-    with _item_images_lock:
-        current_map = load_item_image_map()
-        if item_name in current_map:
-            return
+    if not force:
+        with _item_images_lock:
+            current_map = load_item_image_map()
+            if item_name in current_map:
+                return
 
     set_item_image_status(
         item_name,
@@ -2448,31 +2956,58 @@ def queue_item_image_lookup(item_name, trigger="new_item_create"):
         trigger=trigger,
         note="Searching for a product image.",
     )
+    clear_item_image_cancel(item_name)
 
     def worker():
         try:
             had_openai_client = get_image_agent_client() is not None
-            result = find_item_image_via_ai(item_name)
+            result = find_item_image_via_ai(item_name, excluded_hosts=excluded_hosts)
+            if is_item_image_lookup_cancelled(item_name):
+                return
             if result and result.get("image_url"):
                 store_item_image_result(item_name, result, trigger=trigger)
             else:
-                failure_note = "No valid image source was found."
-                if not had_openai_client:
-                    failure_note = "OpenAI image agent unavailable in the current runtime."
+                current_map = load_item_image_map()
+                _, existing_image_url = find_item_image_map_match(current_map, item_name)
+                if existing_image_url:
+                    set_item_image_status(
+                        item_name,
+                        IMAGE_STATUS_SUCCESS,
+                        trigger=trigger,
+                        image_url=existing_image_url,
+                        note="Could not find a replacement image. Kept the current saved image.",
+                    )
+                else:
+                    failure_note = "No valid image source was found."
+                    if not had_openai_client:
+                        failure_note = "OpenAI image agent unavailable in the current runtime."
+                    set_item_image_status(
+                        item_name,
+                        IMAGE_STATUS_FAILED,
+                        trigger=trigger,
+                        note=failure_note,
+                    )
+        except Exception as exc:
+            print(f"Image lookup failed for {item_name}: {exc}")
+            if is_item_image_lookup_cancelled(item_name):
+                return
+            current_map = load_item_image_map()
+            _, existing_image_url = find_item_image_map_match(current_map, item_name)
+            if existing_image_url:
+                set_item_image_status(
+                    item_name,
+                    IMAGE_STATUS_SUCCESS,
+                    trigger=trigger,
+                    image_url=existing_image_url,
+                    note="Image regeneration failed unexpectedly. Kept the current saved image.",
+                )
+            else:
                 set_item_image_status(
                     item_name,
                     IMAGE_STATUS_FAILED,
                     trigger=trigger,
-                    note=failure_note,
+                    note=str(exc),
                 )
-        except Exception as exc:
-            print(f"Image lookup failed for {item_name}: {exc}")
-            set_item_image_status(
-                item_name,
-                IMAGE_STATUS_FAILED,
-                trigger=trigger,
-                note=str(exc),
-            )
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -2655,7 +3190,7 @@ def inject_editor_auth():
 def sign_in_page():
     if is_signed_in():
         return redirect(url_for('home'))
-    return render_template('sign_in.html')
+    return render_template('sign_in.html', showcase_items=load_sign_in_showcase_items())
 
 @app.route('/sign-in', methods=['POST'])
 def sign_in():
@@ -3047,6 +3582,7 @@ def create_bin():
     room = (data.get('room') or '').strip()
     wall = (data.get('wall') or '').strip()
     storage_type = (data.get('storage_type') or '').strip()
+    quantity = data.get('quantity', 1)
 
     if not room or not wall or not storage_type:
         return jsonify({"error": "Missing required fields"}), 400
@@ -3059,13 +3595,33 @@ def create_bin():
         return jsonify({"error": "Invalid bin details"}), 400
 
     try:
-        bin_id, bin_upc = functions.createBin(storage_type, wall, room)
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Quantity must be a whole number"}), 400
+
+    if quantity < 1 or quantity > 100:
+        return jsonify({"error": "Quantity must be between 1 and 100"}), 400
+
+    try:
+        created_pairs = functions.createBins(storage_type, wall, room, quantity=quantity)
     except Exception as exc:
         print("An error occurred while creating bin:", exc)
         return jsonify({"error": "Failed to create bin"}), 500
 
-    created_bin = load_bin_row(bin_upc)
-    return jsonify({"success": True, "bin": created_bin, "bin_id": bin_id, "bin_upc": bin_upc}), 200
+    created_bins = [load_bin_row(bin_upc) for _, bin_upc in created_pairs]
+    created_bins = [bin_row for bin_row in created_bins if bin_row]
+    if len(created_bins) != len(created_pairs):
+        return jsonify({"error": "Bin creation did not complete successfully"}), 500
+
+    first_bin_id, first_bin_upc = created_pairs[0]
+    return jsonify({
+        "success": True,
+        "bin": created_bins[0],
+        "bin_id": first_bin_id,
+        "bin_upc": first_bin_upc,
+        "bins": created_bins,
+        "quantity": len(created_bins),
+    }), 200
 
 @app.route('/delete-bin', methods=['POST'])
 def delete_bin():
@@ -3167,11 +3723,64 @@ def item_image_status():
     if not normalized_name:
         return jsonify({"error": "Missing item name"}), 400
 
-    return jsonify({
+    response = jsonify({
         "item_name": normalized_name,
         "status": get_item_image_status(normalized_name),
         "image_url": get_item_image_url(normalized_name),
-    }), 200
+    })
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response, 200
+
+@app.route('/retry-item-image', methods=['POST'])
+def retry_item_image():
+    data = request.get_json(silent=True) or {}
+    item_name = data.get('item_name', '')
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return jsonify({"error": "Missing item name"}), 400
+
+    current_status = get_item_image_status(normalized_name)
+    if current_status == IMAGE_STATUS_PENDING:
+        return jsonify({"success": True, "status": IMAGE_STATUS_PENDING}), 200
+
+    metadata_map = load_item_image_metadata()
+    _, metadata = find_item_image_metadata_match(metadata_map, normalized_name)
+    excluded_hosts = []
+    if isinstance(metadata, dict):
+        source_url = (metadata.get("source_url") or "").strip()
+        if source_url:
+            source_host = get_url_host(source_url)
+            if source_host:
+                excluded_hosts.append(source_host)
+
+    remove_exact_item_image_state(normalized_name)
+
+    queue_item_image_lookup(
+        normalized_name,
+        trigger="manual_retry",
+        force=True,
+        excluded_hosts=excluded_hosts,
+    )
+    return jsonify({"success": True, "status": IMAGE_STATUS_PENDING}), 200
+
+@app.route('/cancel-item-image', methods=['POST'])
+def cancel_item_image():
+    data = request.get_json(silent=True) or {}
+    item_name = data.get('item_name', '')
+    normalized_name = normalize_item_image_key(item_name)
+    if not normalized_name:
+        return jsonify({"error": "Missing item name"}), 400
+
+    cancel_item_image_lookup(normalized_name)
+    set_item_image_status(
+        normalized_name,
+        IMAGE_STATUS_FAILED,
+        trigger="manual_cancel",
+        note="Image search canceled.",
+    )
+    return jsonify({"success": True, "status": IMAGE_STATUS_FAILED}), 200
 
 def query_bins_from_database(room, wall, storage_type):
     WallID = functions.wallDecider(wall,room)

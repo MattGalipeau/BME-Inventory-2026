@@ -28,13 +28,86 @@
             font-family: "Segoe UI", Tahoma, sans-serif;
         }
 
+        .sign-in-layout {
+            width: min(1360px, 100%);
+            display: grid;
+            grid-template-columns: minmax(0, 1.9fr) minmax(330px, 390px);
+            gap: 1.5rem;
+            align-items: stretch;
+        }
+
+        .showcase-card,
         .sign-in-card {
-            width: min(420px, 100%);
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid var(--tertiary-color);
             border-radius: 18px;
             padding: 1.75rem;
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .showcase-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow: hidden;
+        }
+
+        .showcase-stage {
+            display: grid;
+            grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.92fr) minmax(0, 1.08fr);
+            gap: 1rem;
+            align-items: center;
+            min-height: 420px;
+        }
+
+        .showcase-panel {
+            position: relative;
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+            transition: transform 0.45s ease, opacity 0.45s ease, filter 0.45s ease;
+        }
+
+        .showcase-panel img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .showcase-panel figcaption {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 0.9rem 1rem;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+        }
+
+        .showcase-name {
+            display: block;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .showcase-panel.side {
+            height: 300px;
+            opacity: 0.7;
+            filter: saturate(0.9);
+        }
+
+        .showcase-panel.center {
+            height: 400px;
+            transform: scale(1.02);
+            z-index: 1;
+        }
+
+        .showcase-stage.is-transitioning .showcase-panel {
+            opacity: 0.25;
+            transform: scale(0.97);
         }
 
         h1 {
@@ -91,20 +164,83 @@
             color: #ffb7b7;
             font-size: 0.95rem;
         }
+
+        @media (max-width: 960px) {
+            .sign-in-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .showcase-stage {
+                min-height: 0;
+            }
+        }
+
+        @media (max-width: 720px) {
+            body {
+                padding: 1rem;
+            }
+
+            .showcase-card,
+            .sign-in-card {
+                padding: 1.2rem;
+            }
+
+            .showcase-stage {
+                grid-template-columns: 1fr;
+                gap: 0.8rem;
+            }
+
+            .showcase-panel.side,
+            .showcase-panel.center {
+                height: 220px;
+                opacity: 1;
+                transform: none;
+                filter: none;
+            }
+        }
     </style>
 </head>
 <body>
-    <main class="sign-in-card">
-        <h1>BMEnventory</h1>
-        <p>Enter your email to access the inventory tools. No password or account setup is required.</p>
-        <form class="sign-in-form" id="sign-in-form">
-            <div>
-                <label for="email">Email</label>
-                <input id="email" name="email" type="email" autocomplete="email" placeholder="name@uri.edu" pattern=".+@uri\.edu" required>
+    <main class="sign-in-layout">
+        <section class="showcase-card">
+            {% if showcase_items %}
+            <div class="showcase-stage" id="showcase-stage" aria-label="Inventory image carousel">
+                <figure class="showcase-panel side" id="showcase-left">
+                    <img id="showcase-left-image" src="" alt="">
+                    <figcaption>
+                        <span class="showcase-name" id="showcase-left-name"></span>
+                    </figcaption>
+                </figure>
+                <figure class="showcase-panel center" id="showcase-center">
+                    <img id="showcase-center-image" src="" alt="">
+                    <figcaption>
+                        <span class="showcase-name" id="showcase-center-name"></span>
+                    </figcaption>
+                </figure>
+                <figure class="showcase-panel side" id="showcase-right">
+                    <img id="showcase-right-image" src="" alt="">
+                    <figcaption>
+                        <span class="showcase-name" id="showcase-right-name"></span>
+                    </figcaption>
+                </figure>
             </div>
-            <div class="error" id="sign-in-error"></div>
-            <button type="submit">Enter Inventory</button>
-        </form>
+            {% else %}
+            <p>No inventory images are ready yet, but sign-in is still available below.</p>
+            {% endif %}
+        </section>
+
+        <section class="sign-in-card">
+            <h1>BMEnventory</h1>
+            <p>Enter your email to access the inventory tools. No password or account setup is required.</p>
+            <form class="sign-in-form" id="sign-in-form">
+                <div>
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" autocomplete="email" placeholder="name@uri.edu" pattern=".+@uri\.edu" required>
+                </div>
+                <div class="error" id="sign-in-error"></div>
+                <button type="submit">Enter Inventory</button>
+            </form>
+        </section>
     </main>
 
     <script>
@@ -112,6 +248,48 @@
             const form = document.getElementById('sign-in-form');
             const emailInput = document.getElementById('email');
             const errorBox = document.getElementById('sign-in-error');
+            const showcaseStage = document.getElementById('showcase-stage');
+            const showcaseItems = {{ showcase_items|default([])|tojson }};
+
+            function renderShowcasePanel(prefix, item) {
+                const image = document.getElementById(`${prefix}-image`);
+                const name = document.getElementById(`${prefix}-name`);
+                if (!image || !name || !item) {
+                    return;
+                }
+
+                image.src = item.ImageUrl;
+                image.alt = item.Name;
+                name.textContent = item.Name;
+            }
+
+            if (showcaseStage && showcaseItems.length) {
+                let centerIndex = 0;
+
+                const wrappedItem = (offset) => {
+                    const index = (centerIndex + offset + showcaseItems.length) % showcaseItems.length;
+                    return showcaseItems[index];
+                };
+
+                const paintShowcase = () => {
+                    renderShowcasePanel('showcase-left', wrappedItem(-1));
+                    renderShowcasePanel('showcase-center', wrappedItem(0));
+                    renderShowcasePanel('showcase-right', wrappedItem(1));
+                };
+
+                paintShowcase();
+
+                if (showcaseItems.length > 1) {
+                    window.setInterval(() => {
+                        showcaseStage.classList.add('is-transitioning');
+                        window.setTimeout(() => {
+                            centerIndex = (centerIndex + 1) % showcaseItems.length;
+                            paintShowcase();
+                            showcaseStage.classList.remove('is-transitioning');
+                        }, 220);
+                    }, 2000);
+                }
+            }
 
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();

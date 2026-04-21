@@ -56,16 +56,35 @@ body {
     color: var(--secondary-color) !important;
 }
 .nav-user-email {
+    display: inline-flex;
+    align-items: center;
     color: var(--secondary-color);
     cursor: default;
+    font-size: 1rem;
+    line-height: 1;
 }
 .sign-out-form {
     margin: 0;
+    display: flex;
+    align-items: center;
 }
 .sign-out-button {
+    display: inline-flex;
+    align-items: center;
     background: transparent;
     border: 0;
     padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+.sign-out-button::after {
+    display: none;
+}
+.sign-out-button:hover::after {
+    width: 0;
+}
+.sign-out-button:hover {
+    color: var(--secondary-color) !important;
 }
 .auth-modal-overlay {
     display: none;
@@ -325,6 +344,59 @@ body {
     color: var(--dark-color);
 }
 
+#newEntryModal .existing-item-preview {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(112, 255, 167, 0.28);
+}
+
+#newEntryModal .existing-item-preview-image-wrap {
+    flex: 0 0 96px;
+    width: 96px;
+    height: 96px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#newEntryModal .existing-item-preview-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+#newEntryModal .existing-item-preview-content {
+    min-width: 0;
+}
+
+#newEntryModal .existing-item-preview-kicker {
+    margin: 0 0 0.2rem;
+    color: var(--secondary-color);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+#newEntryModal .existing-item-preview h6 {
+    margin: 0 0 0.45rem;
+    color: var(--light-color);
+    font-size: 1.05rem;
+}
+
+#newEntryModal .existing-item-preview p {
+    margin: 0.2rem 0;
+    color: rgba(255, 255, 255, 0.9);
+}
+
 .inventory-table thead th {
     color: var(--secondary-color);
     border-bottom-color: var(--tertiary-color);
@@ -376,6 +448,10 @@ body {
     vertical-align: middle;
     border: 1px solid rgba(255, 255, 255, 0.35);
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.image-status-indicator[data-clickable="true"] {
+    cursor: pointer;
 }
 
 .image-status-success {

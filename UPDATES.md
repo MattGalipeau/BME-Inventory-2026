@@ -129,6 +129,30 @@ This file tracks the major code and product changes made to the BME Inventory ap
 - Persisted floorplan game score and attempts by user email across sign-ins.
 - Renamed the floorplan game page in the UI to `ItemGuessr`.
 - Updated the visible app branding from `BME Inventory` to `BMEnventory`.
+- Added large green check and red X feedback visuals to ItemGuessr after each guess.
+- Matched navbar account email sizing/alignment to the sign-out button across pages.
+- Fixed new bin creation when storage-type bin numbers had gaps, and restored proper directory/label creation behavior.
+- Added bulk bin creation so the database modal can create and print multiple bins at once.
+- Added an auto-rotating sign-in showcase carousel with inventory item images.
+- Added retry support for failed item image searches directly from the database page.
+- Added live existing-item previews in the new-entry modal to help avoid duplicate item entry.
+- Allowed successful item image statuses to be clicked too, forcing a fresh image regeneration search.
+- Kept existing saved item images green when regeneration cannot find a better replacement, and let saved image matches override stale failed metadata.
+- Made regeneration clear the exact saved item photo first, so retries start from a blank placeholder instead of reusing the old image while pending.
+- Disabled caching for live image-status polling so failed retries turn red immediately without a page refresh.
+- Added a final retailer fallback for item images: if validation still fails, the app now uses the first live image it can pull from a shopping/product page before marking the search failed.
+- Expanded product-page image extraction to recognize more modern retailer markup like `src`, `data-src`, `srcset`, JSON image fields, and relative image URLs.
+- Broadened Bing result parsing for product-page discovery so image search can capture more retailer links and encoded URLs from the search results page.
+- Hardened image lookup URL parsing so malformed candidates are skipped instead of crashing the search with errors like `Invalid IPv6 URL`.
+- Filtered obvious non-product image URLs such as profile-photo endpoints and made validator API errors non-fatal so image search can continue past bad candidates.
+- Added a Uline preference for supply-like items such as tapes, cassettes, labels, and markers so image search favors more scrape-friendly retailer pages.
+- Made yellow image-status indicators clickable to cancel an in-progress image search instead of waiting for it to finish.
+- Tightened image candidate sanity checks and restricted validator uploads to supported formats so junk hosts and unsupported image types are skipped earlier.
+- Reworked live image-status polling on the database page so the final failed/success state replaces yellow more reliably without needing a page refresh.
+- Relaxed item-image acceptance so a real downloadable image can be used as a fallback even when the validator does not approve or cannot process that candidate.
+- Rejected obvious logo/icon/banner image candidates and limited the unvalidated fallback to product-page-derived images so generic web logos are less likely to be accepted.
+- Strengthened the vision-validator prompt and restored validator approval as the requirement when the image agent is available, so junk images are less likely to slip through.
+- Switched the item-image finder to a more GPT-4o-driven, supplier-aware flow with more AI attempts and stronger distributor/site targeting for components and supplies before falling back to scraper-style discovery.
 
 ## Notes
 

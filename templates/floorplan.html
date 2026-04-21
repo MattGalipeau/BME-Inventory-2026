@@ -78,9 +78,37 @@
         }
 
         .nav-link.active { color: var(--primary-color); }
-        .nav-user-email { color: var(--secondary-color); cursor: default; }
-        .sign-out-form { margin: 0; }
-        .sign-out-button { background: transparent; border: 0; padding: 0; }
+        .nav-user-email {
+            display: inline-flex;
+            align-items: center;
+            color: var(--secondary-color);
+            cursor: default;
+            font-size: 1rem;
+            line-height: 1;
+        }
+        .sign-out-form {
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+        .sign-out-button {
+            display: inline-flex;
+            align-items: center;
+            background: transparent;
+            border: 0;
+            padding: 0;
+            font-size: 1rem;
+            line-height: 1;
+        }
+        .sign-out-button::after {
+            display: none;
+        }
+        .sign-out-button:hover::after {
+            width: 0;
+        }
+        .sign-out-button:hover {
+            color: var(--secondary-color) !important;
+        }
         .auth-modal-overlay {
             display: none;
             position: fixed;
@@ -378,7 +406,11 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             color: var(--light-color);
             line-height: 1.45;
-            min-height: 88px;
+            min-height: 230px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 0.85rem;
         }
 
         .feedback-box.correct {
@@ -389,6 +421,30 @@
         .feedback-box.incorrect {
             background: rgba(255, 174, 112, 0.12);
             border-color: rgba(255, 174, 112, 0.28);
+        }
+
+        .feedback-text {
+            margin: 0;
+        }
+
+        .feedback-mark {
+            min-height: 118px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(5rem, 9vw, 7.5rem);
+            font-weight: 800;
+            line-height: 1;
+            color: rgba(255, 255, 255, 0.14);
+            user-select: none;
+        }
+
+        .feedback-box.correct .feedback-mark {
+            color: #57e388;
+        }
+
+        .feedback-box.incorrect .feedback-mark {
+            color: #ff5f5f;
         }
 
         .legend {
@@ -519,7 +575,10 @@
                             <h2 class="guess-item" id="current-item-name">{{ current_item.name }}</h2>
                             <p class="guess-help">Choose the room that contains this item.</p>
                         </div>
-                        <div class="feedback-box" id="game-feedback">{{ game_state.feedback }}</div>
+                        <div class="feedback-box" id="game-feedback">
+                            <p class="feedback-text" id="game-feedback-text">{{ game_state.feedback }}</p>
+                            <div class="feedback-mark" id="game-feedback-mark" aria-hidden="true"></div>
+                        </div>
                         <p class="legend">The floorplan stays static for orientation. Only the room buttons are interactive, and each correct guess advances to the next item.</p>
                     {% else %}
                         <div class="game-empty">No floorplan game items are available yet. Once more inventory items have room locations, this page will start generating challenges.</div>
@@ -637,11 +696,13 @@
             const gameScore = document.getElementById('game-score');
             const gameAttempts = document.getElementById('game-attempts');
             const gameFeedback = document.getElementById('game-feedback');
+            const gameFeedbackText = document.getElementById('game-feedback-text');
+            const gameFeedbackMark = document.getElementById('game-feedback-mark');
             const currentItemName = document.getElementById('current-item-name');
             let isSubmittingGuess = false;
 
             async function submitGuess(room) {
-                if (isSubmittingGuess || !gameFeedback || !currentItemName) {
+                if (isSubmittingGuess || !gameFeedback || !gameFeedbackText || !gameFeedbackMark || !currentItemName) {
                     return;
                 }
 
@@ -650,7 +711,8 @@
                     button.disabled = true;
                 });
                 gameFeedback.classList.remove('correct', 'incorrect');
-                gameFeedback.textContent = `Checking room ${room}...`;
+                gameFeedbackText.textContent = `Checking room ${room}...`;
+                gameFeedbackMark.textContent = '';
 
                 try {
                     const response = await fetch('{{ url_for("floorplan_guess") }}', {
@@ -666,7 +728,8 @@
 
                     const result = await response.json();
                     if (!response.ok || !result.success) {
-                        gameFeedback.textContent = result.error || 'Could not submit that guess.';
+                        gameFeedbackText.textContent = result.error || 'Could not submit that guess.';
+                        gameFeedbackMark.textContent = '';
                         return;
                     }
 
@@ -677,10 +740,12 @@
                         gameAttempts.textContent = result.attempts;
                     }
                     currentItemName.textContent = result.current_item;
-                    gameFeedback.textContent = result.feedback;
+                    gameFeedbackText.textContent = result.feedback;
+                    gameFeedbackMark.textContent = result.correct ? '✓' : '✕';
                     gameFeedback.classList.add(result.correct ? 'correct' : 'incorrect');
                 } catch (error) {
-                    gameFeedback.textContent = 'The guess could not be submitted right now.';
+                    gameFeedbackText.textContent = 'The guess could not be submitted right now.';
+                    gameFeedbackMark.textContent = '';
                 } finally {
                     isSubmittingGuess = false;
                     roomButtons.forEach((button) => {

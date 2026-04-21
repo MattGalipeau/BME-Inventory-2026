@@ -58,16 +58,35 @@ body {
     color: var(--secondary-color) !important;
 }
 .nav-user-email {
+    display: inline-flex;
+    align-items: center;
     color: var(--secondary-color);
     cursor: default;
+    font-size: 1rem;
+    line-height: 1;
 }
 .sign-out-form {
     margin: 0;
+    display: flex;
+    align-items: center;
 }
 .sign-out-button {
+    display: inline-flex;
+    align-items: center;
     background: transparent;
     border: 0;
     padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+.sign-out-button::after {
+    display: none;
+}
+.sign-out-button:hover::after {
+    width: 0;
+}
+.sign-out-button:hover {
+    color: var(--secondary-color) !important;
 }
 .auth-modal-overlay {
     display: none;

@@ -223,6 +223,7 @@
                                         data-image-status
                                         data-item-name="{{ entry.Name }}"
                                         data-status="{{ entry.ImageStatus or 'failed' }}"
+                                        data-clickable="{{ 'false' if (entry.ImageStatus or 'failed') == 'pending' else 'true' }}"
                                         title="Image status: {{ entry.ImageStatus or 'failed' }}"
                                         aria-label="Image status: {{ entry.ImageStatus or 'failed' }}"
                                     ></span>
@@ -424,7 +425,18 @@
                                     name="quantity"
                                     placeholder="Item Quantity"
                                     min="0"
-                                    required>
+                                required>
+                            </div>
+                        </div>
+                        <div class="existing-item-preview d-none mt-3" id="existing-item-preview">
+                            <div class="existing-item-preview-image-wrap">
+                                <img id="existing-item-preview-image" class="existing-item-preview-image" src="" alt="Existing item image">
+                            </div>
+                            <div class="existing-item-preview-content">
+                                <p class="existing-item-preview-kicker">Existing Item Found</p>
+                                <h6 id="existing-item-preview-title">Item Name</h6>
+                                <p id="existing-item-preview-qty">Total Quantity: 0</p>
+                                <p id="existing-item-preview-locations">Locations: Unknown</p>
                             </div>
                         </div>
                     </form>
@@ -467,7 +479,7 @@
                                 <option value="West">West</option>
                             </select>
                         </div>
-                        <div class="mb-0">
+                        <div class="mb-3">
                             <label class="form-label" for="create-bin-storage-type">Storage Type</label>
                             <select class="form-select" id="create-bin-storage-type" required>
                                 <option value="">--Storage Type--</option>
@@ -479,6 +491,19 @@
                                 <option value="Overhead">Overhead</option>
                                 <option value="Other">Other</option>
                             </select>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="create-bin-quantity">Quantity</label>
+                            <input
+                                type="number"
+                                class="form-control"
+                                id="create-bin-quantity"
+                                min="1"
+                                max="100"
+                                step="1"
+                                value="1"
+                                required
+                            >
                         </div>
                     </form>
                 </div>
@@ -530,6 +555,7 @@
             const createBinRoomInput = document.getElementById('create-bin-room');
             const createBinWallInput = document.getElementById('create-bin-wall');
             const createBinStorageTypeInput = document.getElementById('create-bin-storage-type');
+            const createBinQuantityInput = document.getElementById('create-bin-quantity');
             const createBinButton = document.getElementById('create-bin-button');
             const toggleBinDirectoryButton = document.getElementById('toggle-bin-directory');
             const binDirectoryPanel = document.getElementById('bin-directory-panel');
@@ -629,6 +655,7 @@
                                 data-image-status
                                 data-item-name="${entry.Name ?? ''}"
                                 data-status="${entry.ImageStatus || 'pending'}"
+                                data-clickable="${(entry.ImageStatus || 'pending') === 'pending' ? 'false' : 'true'}"
                                 title="Image status: ${entry.ImageStatus || 'pending'}"
                                 aria-label="Image status: ${entry.ImageStatus || 'pending'}"
                             ></span>
@@ -677,10 +704,66 @@
 
                 const normalizedStatus = ['pending', 'success', 'failed'].includes(status) ? status : 'failed';
                 indicator.dataset.status = normalizedStatus;
+                indicator.dataset.clickable = 'true';
                 indicator.classList.remove('image-status-pending', 'image-status-success', 'image-status-failed');
                 indicator.classList.add(`image-status-${normalizedStatus}`);
-                indicator.title = `Image status: ${normalizedStatus}`;
-                indicator.setAttribute('aria-label', `Image status: ${normalizedStatus}`);
+                const helperText = normalizedStatus === 'pending'
+                    ? ' Click to stop the current image search.'
+                    : ' Click to regenerate image search.';
+                indicator.title = `Image status: ${normalizedStatus}.${helperText}`;
+                indicator.setAttribute('aria-label', `Image status: ${normalizedStatus}.${helperText}`);
+            }
+
+            const imageStatusPollHandles = new Map();
+
+            function stopImageStatusPolling(itemName) {
+                const existingHandle = imageStatusPollHandles.get(itemName);
+                if (existingHandle) {
+                    window.clearTimeout(existingHandle);
+                    imageStatusPollHandles.delete(itemName);
+                }
+            }
+
+            function bindImageStatusIndicator(indicator) {
+                if (!indicator || indicator.dataset.retryBound === 'true') {
+                    return;
+                }
+
+                indicator.dataset.retryBound = 'true';
+                indicator.addEventListener('click', async () => {
+                    const itemName = indicator.dataset.itemName;
+                    if (!itemName) {
+                        return;
+                    }
+
+                    const isPending = indicator.dataset.status === 'pending';
+                    stopImageStatusPolling(itemName);
+                    if (!isPending) {
+                        applyImageStatus(indicator, 'pending');
+                    }
+
+                    const response = await fetch(
+                        isPending ? '{{ url_for("cancel_item_image") }}' : '{{ url_for("retry_item_image") }}',
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ item_name: itemName })
+                        }
+                    );
+
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        applyImageStatus(indicator, isPending ? 'pending' : 'failed');
+                        window.alert(result.error || (isPending ? 'Failed to stop image search.' : 'Failed to retry image search.'));
+                        return;
+                    }
+
+                    if ((result.status || 'pending') === 'pending') {
+                        startImageStatusPolling(indicator.closest('tr'));
+                    } else {
+                        applyImageStatus(indicator, result.status);
+                    }
+                });
             }
 
             function startImageStatusPolling(row) {
@@ -690,32 +773,46 @@
                     return;
                 }
 
+                stopImageStatusPolling(itemName);
+
                 let attempts = 0;
                 const maxAttempts = 24;
-                const pollHandle = window.setInterval(async () => {
+
+                const pollOnce = async () => {
                     attempts += 1;
                     try {
-                        const response = await fetch(`{{ url_for("item_image_status") }}?item_name=${encodeURIComponent(itemName)}`);
+                        const response = await fetch(
+                            `{{ url_for("item_image_status") }}?item_name=${encodeURIComponent(itemName)}&_=${Date.now()}`,
+                            { cache: 'no-store' }
+                        );
                         if (!response.ok) {
                             if (attempts >= maxAttempts) {
                                 applyImageStatus(indicator, 'failed');
-                                window.clearInterval(pollHandle);
+                                stopImageStatusPolling(itemName);
+                                return;
                             }
-                            return;
-                        }
-
-                        const result = await response.json();
-                        applyImageStatus(indicator, result.status);
-                        if (result.status !== 'pending' || attempts >= maxAttempts) {
-                            window.clearInterval(pollHandle);
+                        } else {
+                            const result = await response.json();
+                            const normalizedStatus = ['pending', 'success', 'failed'].includes(result.status) ? result.status : 'failed';
+                            applyImageStatus(indicator, normalizedStatus);
+                            if (normalizedStatus !== 'pending' || attempts >= maxAttempts) {
+                                stopImageStatusPolling(itemName);
+                                return;
+                            }
                         }
                     } catch (error) {
                         if (attempts >= maxAttempts) {
                             applyImageStatus(indicator, 'failed');
-                            window.clearInterval(pollHandle);
+                            stopImageStatusPolling(itemName);
+                            return;
                         }
                     }
-                }, 2500);
+
+                    const nextHandle = window.setTimeout(pollOnce, 2000);
+                    imageStatusPollHandles.set(itemName, nextHandle);
+                };
+
+                pollOnce();
             }
 
             function bindEditButton(button) {
@@ -883,6 +980,10 @@
                     }
                     window.location.href = result.redirect;
                 });
+            });
+
+            document.querySelectorAll('[data-image-status]').forEach((indicator) => {
+                bindImageStatusIndicator(indicator);
             });
 
             function setDatabaseView(view) {
@@ -1100,6 +1201,7 @@
                     room: createBinRoomInput.value,
                     wall: createBinWallInput.value,
                     storage_type: createBinStorageTypeInput.value,
+                    quantity: createBinQuantityInput.value,
                 };
 
                 const response = await fetch('{{ url_for("create_bin") }}', {
@@ -1118,17 +1220,20 @@
                 const emptyStateRow = binsTableBody?.querySelector('.empty-state')?.closest('tr');
                 emptyStateRow?.remove();
 
-                if (binsTableBody && result.bin) {
-                    binsTableBody.insertAdjacentHTML('beforeend', buildBinRow(result.bin));
-                    const newRow = binsTableBody.lastElementChild;
-                    const newPrintButton = newRow?.querySelector('.print-bin-button');
-                    const newDeleteButton = newRow?.querySelector('.delete-bin-button');
-                    if (newPrintButton) {
-                        bindPrintBinButton(newPrintButton);
-                    }
-                    if (newDeleteButton) {
-                        bindDeleteBinButton(newDeleteButton);
-                    }
+                const createdBins = Array.isArray(result.bins) && result.bins.length ? result.bins : (result.bin ? [result.bin] : []);
+                if (binsTableBody && createdBins.length) {
+                    createdBins.forEach((bin) => {
+                        binsTableBody.insertAdjacentHTML('beforeend', buildBinRow(bin));
+                        const newRow = binsTableBody.lastElementChild;
+                        const newPrintButton = newRow?.querySelector('.print-bin-button');
+                        const newDeleteButton = newRow?.querySelector('.delete-bin-button');
+                        if (newPrintButton) {
+                            bindPrintBinButton(newPrintButton);
+                        }
+                        if (newDeleteButton) {
+                            bindDeleteBinButton(newDeleteButton);
+                        }
+                    });
                     sortRows(sortState.key, sortState.direction);
                     renderSortIndicators();
                 }
@@ -1150,11 +1255,15 @@
                         if (firstRow) {
                             const newEditButton = firstRow.querySelector('.edit-item-button');
                             const newPrintButton = firstRow.querySelector('.print-item-button');
+                            const newImageIndicator = firstRow.querySelector('[data-image-status]');
                             if (newEditButton) {
                                 bindEditButton(newEditButton);
                             }
                             if (newPrintButton) {
                                 bindPrintButton(newPrintButton);
+                            }
+                            if (newImageIndicator) {
+                                bindImageStatusIndicator(newImageIndicator);
                             }
                             startImageStatusPolling(firstRow);
                         }

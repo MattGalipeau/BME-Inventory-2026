@@ -91,16 +91,35 @@ body {
     color: var(--secondary-color) !important;
 }
 .nav-user-email {
+    display: inline-flex;
+    align-items: center;
     color: var(--secondary-color);
     cursor: default;
+    font-size: 1rem;
+    line-height: 1;
 }
 .sign-out-form {
     margin: 0;
+    display: flex;
+    align-items: center;
 }
 .sign-out-button {
+    display: inline-flex;
+    align-items: center;
     background: transparent;
     border: 0;
     padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+.sign-out-button::after {
+    display: none;
+}
+.sign-out-button:hover::after {
+    width: 0;
+}
+.sign-out-button:hover {
+    color: var(--secondary-color) !important;
 }
 .auth-modal-overlay {
     display: none;
@@ -425,11 +444,31 @@ p{
 
 .close-button {
     position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 20px;
-    cursor: pointer;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    padding: 0;
+    margin: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: transparent;
     color: var(--dark-color);
+    font-size: 24px;
+    line-height: 1;
+    padding-bottom: 3px;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    cursor: pointer;
+}
+
+.close-button:hover {
+    color: #fff;
+    background: #ca2020;
+    border-color: #ca2020;
 }
 
 @media (max-width: 768px) {

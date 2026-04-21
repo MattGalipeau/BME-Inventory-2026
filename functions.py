@@ -40,8 +40,7 @@ def Print(Code_8, VbsFile, binType, binID):
     if binType == None:
         szBuf = "\"{}\" \"{}\" \"{}\"".format(wscript_path, VbsFile, Code_8) # passes in an argument to the vbs, we are only passing in one arg, szItemCode.
     else:
-        binType = f'{binType} #{binID}'
-        szBuf = "\"{}\" \"{}\" \"{}\" \"{}\"".format(wscript_path, VbsFile, Code_8, binType) # passes in an argument to the vbs, we are only passing in one arg, szItemCode.
+        szBuf = "\"{}\" \"{}\" \"{}\" \"{}\" \"{}\"".format(wscript_path, VbsFile, Code_8, binType, binID)
     subprocess.run(szBuf, shell=True) # runs the file. I know you didn't like my past history with using subprocess lol. Or maybe that was Raph.
     return 0
 
@@ -94,14 +93,27 @@ def createBin(binType, Wall, Room):
     try:
         cnt.executemany("INSERT INTO bins (BinID, BinUPC, BinType, WallID) VALUES(?,?,?,?)", executive)
         VbsFile = "BcdBinLabel.vbs" 
-        cursor.execute("SELECT * FROM bins WHERE BinType = ?", (binType,))
-        results = cursor.fetchall()
-        number = len(results)
-        Print(binUPC, VbsFile, binType, number)
-    except:
-        print("This bin already exists, unforeseen issue as this will only get called if bin does not exist")
+        Print(binUPC, VbsFile, binType, binID)
+    except sqlite3.Error as exc:
+        cnt.rollback()
+        print("Failed to create bin:", exc)
+        raise
     cnt.commit()
     return binID, binUPC
+
+def createBins(binType, Wall, Room, quantity=1):
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        quantity = 1
+
+    quantity = max(1, quantity)
+    created_bins = []
+    for _ in range(quantity):
+        binID, binUPC = createBin(binType, Wall, Room)
+        created_bins.append((binID, binUPC))
+
+    return created_bins
 
 def createItem(itemName):
     itemName = " ".join((itemName or "").split()).strip()
@@ -184,9 +196,12 @@ def binUPCFinder(binType, binID, wallID=None):
     
 
 def binUPCDecider(binType):
-    cursor.execute("SELECT * FROM bins WHERE BinType = ?", (binType,))
-    results = cursor.fetchall()
-    binID = len(results) + 1
+    cursor.execute("SELECT MAX(BinID) FROM bins WHERE BinType = ?", (binType,))
+    result = cursor.fetchone()
+    try:
+        binID = int(result[0]) + 1
+    except (TypeError, ValueError):
+        binID = 1
 
     binUPC = int(binID) + 50000000
     if binType == "Bin":
