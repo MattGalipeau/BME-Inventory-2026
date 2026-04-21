@@ -248,6 +248,66 @@
             display: block;
         }
 
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            background-image:
+                linear-gradient(to right, rgba(0, 0, 0, 0.12) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+            background-size: calc(100% / {{ bin_coord_columns|length }}) calc(100% / {{ bin_coord_rows|length }});
+        }
+
+        .grid-label {
+            position: absolute;
+            font-size: 0.5rem;
+            font-weight: 700;
+            color: rgba(0, 0, 0, 0.6);
+            z-index: 2;
+            pointer-events: none;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+        }
+
+        .grid-label-col {
+            top: 4px;
+            transform: translateX(-50%);
+        }
+
+        .grid-label-row {
+            left: 4px;
+            transform: translateY(-50%);
+        }
+
+        .bin-marker {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            margin-left: -6px;
+            margin-top: -6px;
+            border-radius: 50%;
+            background: rgba(200, 30, 30, 0.92);
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .bin-marker::after {
+            content: attr(data-coordinates);
+            position: absolute;
+            top: -1.2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.08rem 0.28rem;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.72);
+            color: #fff;
+            font-size: 0.56rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
         .room-button {
             position: absolute;
             padding: 0;
@@ -453,6 +513,7 @@
             line-height: 1.45;
         }
 
+
         .game-empty {
             color: var(--tertiary-light);
             text-align: center;
@@ -488,7 +549,8 @@
             <ul class="navbar-nav">
                 <li class="nav-item"><a class="nav-link" href="/">Search</a></li>
                 <li class="nav-item"><a class="nav-link active" href="/floorplan">ItemGuessr</a></li>
-                <li class="nav-item"><a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a></li>
+                <li class="nav-item"><a class="nav-link" href="/checkout-request">Checkout Request</a></li>
+                <li class="nav-item"><a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{% if database_authenticated %}&#128275;{% else %}&#128274;{% endif %}</span></a></li>
                 <li class="nav-item nav-user"><span class="nav-link nav-user-email">{{ signed_in_email }}</span></li>
                 <li class="nav-item nav-sign-out">
                     <form method="post" action="{{ url_for('sign_out') }}" class="sign-out-form">
@@ -509,6 +571,27 @@
                             src="{{ url_for('static', filename='floorplan-base-colored.png') }}"
                             alt="Floorplan for rooms 110, 110A, 110B, and 110C"
                         >
+                        <div class="grid-overlay" aria-hidden="true"></div>
+                        {% for column in bin_coord_columns %}
+                            <span
+                                class="grid-label grid-label-col"
+                                style="left: {{ ((loop.index0 + 0.5) / (bin_coord_columns|length) * 100)|round(4) }}%;"
+                            >{{ column }}</span>
+                        {% endfor %}
+                        {% for row in bin_coord_rows %}
+                            <span
+                                class="grid-label grid-label-row"
+                                style="top: {{ ((loop.index0 + 0.5) / (bin_coord_rows|length) * 100)|round(4) }}%;"
+                            >{{ row }}</span>
+                        {% endfor %}
+                        {% for marker in bin_markers %}
+                            <div
+                                class="bin-marker"
+                                data-coordinates="{{ marker.Coordinates }}"
+                                title="{{ marker.BinType }} {{ marker.BinID }} - {{ marker.RoomName }} {{ marker.WallName }} - {{ marker.Coordinates }}"
+                                style="left: {{ ((marker.GridColumn + 0.5) / (bin_coord_columns|length) * 100)|round(4) }}%; top: {{ ((marker.GridRow + 0.5) / (bin_coord_rows|length) * 100)|round(4) }}%;"
+                            ></div>
+                        {% endfor %}
                         <button class="room-button room-110" type="button" aria-label="Room 110" title="Room 110" data-room-button data-room="110"{% if not current_item %} disabled{% endif %}>
                             <img class="room-slice" src="{{ url_for('static', filename='room-110-fill-colored.png') }}" alt="">
                             <span class="room-label">110</span>
@@ -579,7 +662,6 @@
                             <p class="feedback-text" id="game-feedback-text">{{ game_state.feedback }}</p>
                             <div class="feedback-mark" id="game-feedback-mark" aria-hidden="true"></div>
                         </div>
-                        <p class="legend">The floorplan stays static for orientation. Only the room buttons are interactive, and each correct guess advances to the next item.</p>
                     {% else %}
                         <div class="game-empty">No floorplan game items are available yet. Once more inventory items have room locations, this page will start generating challenges.</div>
                     {% endif %}

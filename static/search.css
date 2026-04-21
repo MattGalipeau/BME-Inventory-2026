@@ -400,9 +400,29 @@ p{
     position: relative;
     padding-left: 1rem;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 100%;
+}
+
+.item-location-summary {
+    width: 100%;
+    margin: 0 0 0.8rem;
+    color: var(--primary-dark);
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.item-floorplan-map {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, 390px);
+    margin: 0 auto;
+    overflow: hidden;
 }
 
 #itemTitle {
@@ -433,13 +453,43 @@ p{
 
 .item-floorplan-image {
     display: block;
-    width: min(100%, 340px);
+    width: calc(100% + 50px);
     max-height: 420px;
     object-fit: contain;
     border-radius: 12px;
     background: rgba(0, 0, 0, 0.04);
     padding: 0.25rem;
-    margin: 0 auto;
+    margin: 0 -25px;
+}
+
+.item-floorplan-markers {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -25px;
+    right: -25px;
+    padding: 0.25rem;
+    box-sizing: border-box;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.item-floorplan-marker {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: #ff0000;
+    font-size: 1.17rem;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow:
+        -0.6px 0 #ffffff,
+        0.6px 0 #ffffff,
+        0 -0.6px #ffffff,
+        0 0.6px #ffffff;
+    pointer-events: none;
+    z-index: 2;
 }
 
 .close-button {

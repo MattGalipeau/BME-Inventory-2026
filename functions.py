@@ -81,7 +81,7 @@ def createItemLocator(itemName, binNumber, Qty, binType, Wall, Room):
         TotalQtyChange(UPC, Qty)
         cnt.commit()
 
-def createBin(binType, Wall, Room):
+def createBin(binType, Wall, Room, coordinates=None):
     #cursor.execute("SELECT MAX(BinD) FROM bins")
     #try:
     #    binID = (cursor.fetchone())[0]+1
@@ -89,9 +89,9 @@ def createBin(binType, Wall, Room):
     #    binID = 1
     WallID = wallDecider(Wall, Room)
     binUPC, binID = binUPCDecider(binType)
-    executive = [(binID, binUPC, binType, WallID)]
+    executive = [(binID, binUPC, binType, WallID, coordinates)]
     try:
-        cnt.executemany("INSERT INTO bins (BinID, BinUPC, BinType, WallID) VALUES(?,?,?,?)", executive)
+        cnt.executemany("INSERT INTO bins (BinID, BinUPC, BinType, WallID, Coordinates) VALUES(?,?,?,?,?)", executive)
         VbsFile = "BcdBinLabel.vbs" 
         Print(binUPC, VbsFile, binType, binID)
     except sqlite3.Error as exc:
@@ -101,7 +101,7 @@ def createBin(binType, Wall, Room):
     cnt.commit()
     return binID, binUPC
 
-def createBins(binType, Wall, Room, quantity=1):
+def createBins(binType, Wall, Room, quantity=1, coordinates=None):
     try:
         quantity = int(quantity)
     except (TypeError, ValueError):
@@ -110,7 +110,7 @@ def createBins(binType, Wall, Room, quantity=1):
     quantity = max(1, quantity)
     created_bins = []
     for _ in range(quantity):
-        binID, binUPC = createBin(binType, Wall, Room)
+        binID, binUPC = createBin(binType, Wall, Room, coordinates=coordinates)
         created_bins.append((binID, binUPC))
 
     return created_bins
@@ -173,16 +173,19 @@ def wallDecider(Wall, Room):
     return wallID
 
 def deleteItemEntry(EntryID): #entry ID is the primary key for item_bin. Would it be easy to grab this when you select an item on the user interface?
+    EntryID = int(EntryID)
     cnt.execute("DELETE FROM item_bin WHERE EntryID = ?", (EntryID,))
     cnt.commit()
 
 def binUPCFinder(binType, binID, wallID=None):
+    binID = int(binID)
     if wallID is None:
         cursor.execute(
             "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ?",
             (binType, binID)
         )
     else:
+        wallID = int(wallID)
         cursor.execute(
             "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ? AND WallID = ?",
             (binType, binID, wallID)
@@ -221,6 +224,8 @@ def binUPCDecider(binType):
     return binUPC, binID
 
 def editQtyEntry(qtyUpdate, EntryID):
+    qtyUpdate = int(qtyUpdate)
+    EntryID = int(EntryID)
     cursor.execute("SELECT Qty FROM item_bin WHERE EntryID = ?", (EntryID,))
     OldQty = (cursor.fetchone())[0]
     cursor.execute("SELECT UPC FROM item_bin WHERE EntryID = ?", (EntryID,))
@@ -231,12 +236,16 @@ def editQtyEntry(qtyUpdate, EntryID):
     cnt.commit()
 
 def TotalQtyChange(UPC, qtyChange):
+    UPC = int(UPC)
+    qtyChange = int(qtyChange)
     cursor.execute("SELECT TotalQty FROM items WHERE UPC = ?", (UPC,))
     oldTotal = (cursor.fetchone())[0]
     newTotal = int(oldTotal)+int(qtyChange)
     cursor.execute("UPDATE items set TotalQty = ? WHERE UPC = ?", (newTotal, UPC))
 
 def editItemLocation(newBinLocation, EntryID, binType, Wall, Room):
+    newBinLocation = int(newBinLocation)
+    EntryID = int(EntryID)
     cursor.execute("SELECT * FROM bins WHERE BinID = ?", (newBinLocation,))
     if cursor.fetchone() == None:
         print("new bin does not exist. creating the bin first..")

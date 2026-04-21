@@ -12,14 +12,26 @@
 
 	' Data Folder
 	sDataFolder =  UCase(Left(Wscript.ScriptFullName, Len(Wscript.ScriptFullName) - Len(Wscript.ScriptName) - 1))
+    sLabelFolder = sDataFolder & "\Labels"
 	
 	' Print
-	DoPrint(sDataFolder & "\128code_8.lbx")
+	If FileExists(sLabelFolder & "\128code_8.lbx") Then
+		DoPrint(sLabelFolder & "\128code_8.lbx")
+	Else
+		DoPrint(sDataFolder & "\128code_8.lbx")
+	End If
 
 
 	'*******************************************************************
 	'	Print Module
 	'*******************************************************************
+    Function FileExists(path)
+        Dim fso
+        Set fso = CreateObject("Scripting.FileSystemObject")
+        FileExists = fso.FileExists(path)
+        Set fso = Nothing
+    End Function
+
     Sub DoPrint(strFilePath)
 		Set ObjDoc = CreateObject("bpac.Document")
 		bRet = ObjDoc.Open(strFilePath)

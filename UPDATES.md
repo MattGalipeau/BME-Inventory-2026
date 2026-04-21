@@ -153,6 +153,15 @@ This file tracks the major code and product changes made to the BME Inventory ap
 - Rejected obvious logo/icon/banner image candidates and limited the unvalidated fallback to product-page-derived images so generic web logos are less likely to be accepted.
 - Strengthened the vision-validator prompt and restored validator approval as the requirement when the image agent is available, so junk images are less likely to slip through.
 - Switched the item-image finder to a more GPT-4o-driven, supplier-aware flow with more AI attempts and stronger distributor/site targeting for components and supplies before falling back to scraper-style discovery.
+- Added bin `Coordinates` support in the database plus a gridded ItemGuessr floorplan overlay that can plot bins with saved coordinates as real map markers.
+- Increased the floorplan coordinate density from `A1-P12` to a much finer `A1-AV36` grid for more precise bin placement.
+- Added a search-modal floorplan marker so clicking an item card can show a big red `X` at the first saved bin coordinate for that item.
+- Reduced the search-modal floorplan `X` marker size so it sits more cleanly on the map.
+- Replaced blind bin coordinate text entry with a clickable floorplan grid picker in the database create/edit bin flows.
+- Added an optional per-item identifier system so selected items can generate and view unique stored IDs from the database page without affecting pooled inventory items.
+- Updated generated item identifiers to use a 6-character label-friendly format: first 3 letters of the item name plus a 3-digit sequence starting at `000`.
+- Added a `Checkout Request` page that lists only uniquely identified items, allows per-identifier checkout requests, and records requested identifiers in user tracking under `Checked Out`.
+- Audited the SQLite query paths and tightened the remaining dynamic-ID handling so UPC and entry/bin identifiers are coerced to integers before reaching query construction.
 
 ## Notes
 

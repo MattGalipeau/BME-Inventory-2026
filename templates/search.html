@@ -21,6 +21,9 @@
                       <a class="nav-link" href="/floorplan">ItemGuessr</a>
                   </li>
                   <li class="nav-item">
+                      <a class="nav-link" href="/checkout-request">Checkout Request</a>
+                  </li>
+                  <li class="nav-item">
                       <a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a>
                   </li>
                   <li class="nav-item nav-user">
@@ -66,6 +69,8 @@
                     data-item-room="{{ item.Rooms if item.Rooms else 'Unknown' }}"
                     data-item-last-changed="{{ item.LastChanged if item.LastChanged else 'Unknown' }}"
                     data-item-image="{{ item.Thumbnail }}"
+                    data-item-coordinate="{{ item.PrimaryCoordinate }}"
+                    data-item-all-coordinates="{{ item.BinCoordinates }}"
                 >
                     <img class="recent-item-image" src="{{ item.Thumbnail }}" alt="{{ item.Name }} thumbnail">
                     <div class="recent-item-body">
@@ -106,10 +111,14 @@
                 <p id="itemDetails">Details about the item go here...</p>
             </div>
             <div class="item-modal-right">
-                <img
-                    class="item-floorplan-image"
-                    src="{{ url_for('static', filename='floorplan-base-colored.png') }}"
-                    alt="BME floorplan">
+                <p id="itemLocationSummary" class="item-location-summary">Unknown - Unknown</p>
+                <div class="item-floorplan-map">
+                    <img
+                        class="item-floorplan-image"
+                        src="{{ url_for('static', filename='floorplan-base-colored.png') }}"
+                        alt="BME floorplan">
+                    <div id="itemFloorplanMarkers" class="item-floorplan-markers" aria-hidden="true"></div>
+                </div>
             </div>
         </div>
     </div>

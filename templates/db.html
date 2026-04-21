@@ -22,6 +22,9 @@
                         <a class="nav-link" href="/floorplan">ItemGuessr</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/checkout-request">Checkout Request</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link active" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a>
                     </li>
                     <li class="nav-item nav-user">
@@ -64,6 +67,16 @@
                     >
                         View User Tracking
                     </button>
+                    <div class="inventory-search-wrap">
+                        <label class="inventory-search-label" for="inventory-search-input">Search Items</label>
+                        <input
+                            type="text"
+                            id="inventory-search-input"
+                            class="form-control inventory-search-input"
+                            placeholder="Search item name, UPC, room, wall, storage, or bin"
+                            autocomplete="off"
+                        >
+                    </div>
                 </div>
             </div>
 
@@ -102,6 +115,8 @@
                                         Identifier
                                     </button>
                                 </th>
+                                <th scope="col">Coordinates</th>
+                                <th scope="col">Edit</th>
                                 <th scope="col">Print</th>
                                 <th scope="col">Delete</th>
                             </tr>
@@ -115,12 +130,25 @@
                                     data-storage="{{ bin.BinType if bin.BinType else 'Unknown' }}"
                                     data-bin="{{ bin.BinID if bin.BinID is not none else '' }}"
                                     data-identifier="{{ bin.BinUPC if bin.BinUPC else '' }}"
+                                    data-coordinates="{{ bin.Coordinates if bin.Coordinates else '' }}"
                                 >
                                     <td>{{ bin.RoomName if bin.RoomName else 'Unknown' }}</td>
                                     <td>{{ bin.WallName if bin.WallName else 'Unknown' }}</td>
                                     <td>{{ bin.BinType if bin.BinType else 'Unknown' }}</td>
                                     <td>{{ bin.BinID if bin.BinID is not none else 'Unknown' }}</td>
                                     <td>{{ bin.BinUPC if bin.BinUPC else 'Unknown' }}</td>
+                                    <td>{{ bin.Coordinates if bin.Coordinates else 'Unassigned' }}</td>
+                                    <td>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-light edit-bin-coordinates-button"
+                                            data-bin-upc="{{ bin.BinUPC if bin.BinUPC else '' }}"
+                                            data-bin-label="{{ (bin.BinType ~ ' ' ~ bin.BinID) if bin.BinType and bin.BinID is not none else 'Bin' }}"
+                                            data-coordinates="{{ bin.Coordinates if bin.Coordinates else '' }}"
+                                        >
+                                            Set Coordinates
+                                        </button>
+                                    </td>
                                     <td>
                                         <button
                                             type="button"
@@ -143,7 +171,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="7" class="empty-state">No bins found in the database.</td>
+                                    <td colspan="9" class="empty-state">No bins found in the database.</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -167,6 +195,7 @@
                                 <th scope="col">Sign-In Time</th>
                                 <th scope="col">Sign-Out Time</th>
                                 <th scope="col">Items Accessed</th>
+                                <th scope="col">Checked Out</th>
                                 <th scope="col">Access Count</th>
                             </tr>
                         </thead>
@@ -179,12 +208,13 @@
                                     <td>{{ record.SignInTime if record.SignInTime else 'Unknown' }}</td>
                                     <td>{{ record.SignOutTime if record.SignOutTime else 'Active session' }}</td>
                                     <td>{{ record.AccessedItems if record.AccessedItems else 'None yet' }}</td>
+                                    <td>{{ record.CheckedOut if record.CheckedOut else 'None' }}</td>
                                     <td>{{ record.AccessCount if record.AccessCount is not none else 0 }}</td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="6" class="empty-state">No tracked user activity yet.</td>
+                                    <td colspan="7" class="empty-state">No tracked user activity yet.</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -207,7 +237,7 @@
                             <th scope="col">Bin</th>
                             <th scope="col">Date</th>
                             <th scope="col">Time</th>
-                            <th scope="col">Print</th>
+                            <th scope="col">IDs</th>
                             <th scope="col">Edit</th>
                         </tr>
                     </thead>
@@ -239,10 +269,13 @@
                                 <td>
                                     <button
                                         type="button"
-                                        class="btn btn-sm btn-outline-success print-item-button"
+                                        class="btn btn-sm btn-outline-info item-identifiers-button"
                                         data-item-upc="{{ entry.UPC }}"
+                                        data-item-name="{{ entry.Name }}"
+                                        data-item-total-qty="{{ entry.TotalQty if entry.TotalQty is not none else entry.Qty }}"
+                                        data-identifier-count="{{ entry.IdentifierCount if entry.IdentifierCount is not none else 0 }}"
                                     >
-                                        Print
+                                        {{ 'View IDs' if (entry.IdentifierCount or 0) > 0 else 'Create IDs' }}
                                     </button>
                                 </td>
                                 <td>
@@ -346,6 +379,49 @@
                     <button type="button" class="btn delete-entry-button me-auto" id="delete-item-button">Delete Entry</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="save-item-button">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="itemIdentifiersModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">Item Identifiers</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="item-identifiers-error" class="alert alert-danger d-none mb-3"></div>
+                    <input type="hidden" id="item-identifiers-upc">
+                    <div class="identifier-summary">
+                        <h6 id="item-identifiers-name">Item Name</h6>
+                        <p id="item-identifiers-meta" class="mb-0">UPC 0 · 0 / 0 IDs created</p>
+                    </div>
+                    <div class="identifier-actions-row">
+                        <button type="button" class="btn btn-primary" id="generate-item-identifiers-button">Generate Missing IDs</button>
+                    </div>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-dark table-hover mb-0 align-middle inventory-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Identifier</th>
+                                    <th scope="col">Created Date</th>
+                                    <th scope="col">Created Time</th>
+                                    <th scope="col">Print</th>
+                                    <th scope="col">Delete</th>
+                                </tr>
+                            </thead>
+                            <tbody id="item-identifiers-table-body">
+                                <tr>
+                                    <td colspan="5" class="empty-state">No identifiers created yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -505,11 +581,76 @@
                                 required
                             >
                         </div>
+                        <div class="mt-3">
+                            <label class="form-label" for="create-bin-coordinates">Coordinates</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="create-bin-coordinates"
+                                maxlength="4"
+                                placeholder="Click a grid square below"
+                                readonly
+                            >
+                            <div class="form-text text-light" id="create-bin-coordinates-help">Use the floorplan grid below. Leave blank to assign later.</div>
+                            <button type="button" class="btn btn-sm btn-outline-light mt-2" id="clear-create-bin-coordinates">Clear Selection</button>
+                        </div>
+                        <div class="bin-coordinate-picker mt-3" id="create-bin-coordinate-picker" data-input-id="create-bin-coordinates" data-help-id="create-bin-coordinates-help">
+                            <div class="bin-coordinate-picker-map">
+                                <img src="{{ url_for('static', filename='floorplan-base-colored.png') }}" alt="Floorplan coordinate picker">
+                                <div class="bin-coordinate-picker-grid"></div>
+                                <div class="bin-coordinate-picker-selection" aria-hidden="true"></div>
+                            </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer border-secondary">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="create-bin-button">Create Bin</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editBinCoordinatesModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">Set Bin Coordinates</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="edit-bin-coordinates-error" class="alert alert-danger d-none mb-3"></div>
+                    <form id="edit-bin-coordinates-form">
+                        <input type="hidden" id="edit-bin-coordinates-upc">
+                        <div class="mb-3">
+                            <label class="form-label" for="edit-bin-coordinates-label">Bin</label>
+                            <input class="form-control" id="edit-bin-coordinates-label" type="text" readonly>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="edit-bin-coordinates-value">Coordinates</label>
+                            <input
+                                class="form-control"
+                                id="edit-bin-coordinates-value"
+                                type="text"
+                                maxlength="4"
+                                placeholder="Click a grid square below"
+                                readonly
+                            >
+                            <div class="form-text text-light" id="edit-bin-coordinates-help">Grid coordinates use columns A-AV and rows 1-36.</div>
+                            <button type="button" class="btn btn-sm btn-outline-light mt-2" id="clear-edit-bin-coordinates">Clear Selection</button>
+                        </div>
+                        <div class="bin-coordinate-picker mt-3" id="edit-bin-coordinate-picker" data-input-id="edit-bin-coordinates-value" data-help-id="edit-bin-coordinates-help">
+                            <div class="bin-coordinate-picker-map">
+                                <img src="{{ url_for('static', filename='floorplan-base-colored.png') }}" alt="Floorplan coordinate picker">
+                                <div class="bin-coordinate-picker-grid"></div>
+                                <div class="bin-coordinate-picker-selection" aria-hidden="true"></div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-bin-coordinates-button">Save Coordinates</button>
                 </div>
             </div>
         </div>
@@ -540,8 +681,14 @@
             const newEntryModal = new bootstrap.Modal(newEntryModalElement);
             const createBinModalElement = document.getElementById('createBinModal');
             const createBinModal = new bootstrap.Modal(createBinModalElement);
+            const editBinCoordinatesModalElement = document.getElementById('editBinCoordinatesModal');
+            const editBinCoordinatesModal = new bootstrap.Modal(editBinCoordinatesModalElement);
+            const itemIdentifiersModalElement = document.getElementById('itemIdentifiersModal');
+            const itemIdentifiersModal = new bootstrap.Modal(itemIdentifiersModalElement);
             const errorBox = document.getElementById('edit-item-error');
             const createBinErrorBox = document.getElementById('create-bin-error');
+            const editBinCoordinatesErrorBox = document.getElementById('edit-bin-coordinates-error');
+            const itemIdentifiersErrorBox = document.getElementById('item-identifiers-error');
             const entryIdInput = document.getElementById('edit-entry-id');
             const nameInput = document.getElementById('edit-item-name');
             const upcInput = document.getElementById('edit-item-upc');
@@ -556,7 +703,14 @@
             const createBinWallInput = document.getElementById('create-bin-wall');
             const createBinStorageTypeInput = document.getElementById('create-bin-storage-type');
             const createBinQuantityInput = document.getElementById('create-bin-quantity');
+            const createBinCoordinatesInput = document.getElementById('create-bin-coordinates');
+            const clearCreateBinCoordinatesButton = document.getElementById('clear-create-bin-coordinates');
             const createBinButton = document.getElementById('create-bin-button');
+            const editBinCoordinatesUpcInput = document.getElementById('edit-bin-coordinates-upc');
+            const editBinCoordinatesLabelInput = document.getElementById('edit-bin-coordinates-label');
+            const editBinCoordinatesValueInput = document.getElementById('edit-bin-coordinates-value');
+            const clearEditBinCoordinatesButton = document.getElementById('clear-edit-bin-coordinates');
+            const saveBinCoordinatesButton = document.getElementById('save-bin-coordinates-button');
             const toggleBinDirectoryButton = document.getElementById('toggle-bin-directory');
             const binDirectoryPanel = document.getElementById('bin-directory-panel');
             const toggleUserTrackingButton = document.getElementById('toggle-user-tracking');
@@ -571,6 +725,127 @@
             const authSubmit = document.getElementById('auth-submit');
             let activeEditButton = null;
             const inventoryTableBody = document.getElementById('inventory-table-body');
+            const inventorySearchInput = document.getElementById('inventory-search-input');
+            const itemIdentifiersUpcInput = document.getElementById('item-identifiers-upc');
+            const itemIdentifiersName = document.getElementById('item-identifiers-name');
+            const itemIdentifiersMeta = document.getElementById('item-identifiers-meta');
+            const itemIdentifiersTableBody = document.getElementById('item-identifiers-table-body');
+            const generateItemIdentifiersButton = document.getElementById('generate-item-identifiers-button');
+            const BIN_COORD_COLUMN_COUNT = 48;
+            const BIN_COORD_ROW_COUNT = 36;
+
+            function columnIndexToLabel(index) {
+                let label = '';
+                let number = index;
+                while (true) {
+                    const remainder = number % 26;
+                    label = String.fromCharCode(65 + remainder) + label;
+                    number = Math.floor(number / 26);
+                    if (number === 0) {
+                        break;
+                    }
+                    number -= 1;
+                }
+                return label;
+            }
+
+            function normalizeCoordinateValue(value) {
+                const match = String(value || '').trim().toUpperCase().match(/^([A-Z]{1,2})([1-9]|[1-2][0-9]|3[0-6])$/);
+                if (!match) {
+                    return '';
+                }
+
+                const columnLabel = match[1];
+                let columnIndex = 0;
+                for (const character of columnLabel) {
+                    columnIndex = (columnIndex * 26) + (character.charCodeAt(0) - 64);
+                }
+                columnIndex -= 1;
+                if (columnIndex < 0 || columnIndex >= BIN_COORD_COLUMN_COUNT) {
+                    return '';
+                }
+
+                return `${columnLabel}${match[2]}`;
+            }
+
+            function attachCoordinatePicker(pickerElement, options = {}) {
+                if (!pickerElement) {
+                    return null;
+                }
+
+                const input = document.getElementById(pickerElement.dataset.inputId);
+                const helpText = document.getElementById(pickerElement.dataset.helpId);
+                const map = pickerElement.querySelector('.bin-coordinate-picker-map');
+                const selection = pickerElement.querySelector('.bin-coordinate-picker-selection');
+                const originalHelpText = helpText ? helpText.textContent : '';
+                let disabled = false;
+
+                const renderSelection = () => {
+                    const normalized = normalizeCoordinateValue(input?.value);
+                    if (!normalized || !selection) {
+                        if (selection) {
+                            selection.style.display = 'none';
+                        }
+                        return;
+                    }
+
+                    const match = normalized.match(/^([A-Z]{1,2})([1-9]|[1-2][0-9]|3[0-6])$/);
+                    const columnLabel = match[1];
+                    const rowIndex = Number(match[2]) - 1;
+                    let columnIndex = 0;
+                    for (const character of columnLabel) {
+                        columnIndex = (columnIndex * 26) + (character.charCodeAt(0) - 64);
+                    }
+                    columnIndex -= 1;
+
+                    selection.style.left = `${(columnIndex / BIN_COORD_COLUMN_COUNT) * 100}%`;
+                    selection.style.top = `${(rowIndex / BIN_COORD_ROW_COUNT) * 100}%`;
+                    selection.style.display = 'block';
+                };
+
+                const setDisabled = (nextDisabled, message = '') => {
+                    disabled = Boolean(nextDisabled);
+                    pickerElement.classList.toggle('is-disabled', disabled);
+                    if (helpText) {
+                        helpText.textContent = disabled && message ? message : originalHelpText;
+                    }
+                };
+
+                map?.addEventListener('click', (event) => {
+                    if (disabled || !input) {
+                        return;
+                    }
+
+                    const rect = map.getBoundingClientRect();
+                    if (!rect.width || !rect.height) {
+                        return;
+                    }
+
+                    const relativeX = Math.min(Math.max(event.clientX - rect.left, 0), rect.width - 1);
+                    const relativeY = Math.min(Math.max(event.clientY - rect.top, 0), rect.height - 1);
+                    const columnIndex = Math.min(BIN_COORD_COLUMN_COUNT - 1, Math.floor((relativeX / rect.width) * BIN_COORD_COLUMN_COUNT));
+                    const rowIndex = Math.min(BIN_COORD_ROW_COUNT - 1, Math.floor((relativeY / rect.height) * BIN_COORD_ROW_COUNT));
+                    input.value = `${columnIndexToLabel(columnIndex)}${rowIndex + 1}`;
+                    renderSelection();
+                });
+
+                input?.addEventListener('change', renderSelection);
+                input?.addEventListener('input', renderSelection);
+                renderSelection();
+
+                return {
+                    clear() {
+                        if (input) {
+                            input.value = '';
+                        }
+                        renderSelection();
+                    },
+                    sync() {
+                        renderSelection();
+                    },
+                    setDisabled,
+                };
+            }
 
             function closeAuthModal() {
                 authModal.classList.remove('visible');
@@ -578,6 +853,88 @@
                 authPasswordInput.value = '';
                 authError.textContent = '';
             }
+
+            function getInventoryDataRows() {
+                return inventoryTableBody
+                    ? Array.from(inventoryTableBody.querySelectorAll('tr')).filter((row) => !row.querySelector('.empty-state'))
+                    : [];
+            }
+
+            function ensureInventoryFilterEmptyRow() {
+                if (!inventoryTableBody) {
+                    return null;
+                }
+
+                let emptyRow = inventoryTableBody.querySelector('tr[data-filter-empty="true"]');
+                if (!emptyRow) {
+                    emptyRow = document.createElement('tr');
+                    emptyRow.dataset.filterEmpty = 'true';
+                    emptyRow.innerHTML = '<td colspan="13" class="empty-state">No matching items found.</td>';
+                }
+                return emptyRow;
+            }
+
+            function applyInventorySearchFilter() {
+                if (!inventoryTableBody) {
+                    return;
+                }
+
+                const query = (inventorySearchInput?.value || '').trim().toLowerCase();
+                const rows = getInventoryDataRows();
+                let visibleCount = 0;
+
+                rows.forEach((row) => {
+                    const rowText = row.innerText.toLowerCase();
+                    const matches = !query || rowText.includes(query);
+                    row.classList.toggle('d-none', !matches);
+                    if (matches) {
+                        visibleCount += 1;
+                    }
+                });
+
+                const filterEmptyRow = ensureInventoryFilterEmptyRow();
+                if (!filterEmptyRow) {
+                    return;
+                }
+
+                if (query && rows.length > 0 && visibleCount === 0) {
+                    if (!filterEmptyRow.parentElement) {
+                        inventoryTableBody.appendChild(filterEmptyRow);
+                    }
+                } else {
+                    filterEmptyRow.remove();
+                }
+            }
+
+            const createCoordinatePicker = attachCoordinatePicker(document.getElementById('create-bin-coordinate-picker'));
+            const editCoordinatePicker = attachCoordinatePicker(document.getElementById('edit-bin-coordinate-picker'));
+
+            function syncCreateBinCoordinateAvailability() {
+                const quantity = Number(createBinQuantityInput?.value || 1);
+                const singleBin = quantity === 1;
+                createBinCoordinatesInput.readOnly = true;
+                if (!singleBin) {
+                    createCoordinatePicker?.clear();
+                }
+                createCoordinatePicker?.setDisabled(
+                    !singleBin,
+                    'Coordinates can only be assigned during single-bin creation. Set quantity to 1 to pick a grid square.'
+                );
+            }
+
+            clearCreateBinCoordinatesButton?.addEventListener('click', () => {
+                createCoordinatePicker?.clear();
+            });
+
+            clearEditBinCoordinatesButton?.addEventListener('click', () => {
+                editCoordinatePicker?.clear();
+            });
+
+            createBinQuantityInput?.addEventListener('input', syncCreateBinCoordinateAvailability);
+            createBinQuantityInput?.addEventListener('change', syncCreateBinCoordinateAvailability);
+            syncCreateBinCoordinateAvailability();
+            inventorySearchInput?.addEventListener('input', applyInventorySearchFilter);
+            applyInventorySearchFilter();
 
             function openAuthModal() {
                 authModal.classList.add('visible');
@@ -671,10 +1028,13 @@
                         <td>
                             <button
                                 type="button"
-                                class="btn btn-sm btn-outline-success print-item-button"
+                                class="btn btn-sm btn-outline-info item-identifiers-button"
                                 data-item-upc="${entry.UPC ?? ''}"
+                                data-item-name="${entry.Name ?? ''}"
+                                data-item-total-qty="${entry.TotalQty ?? entry.Qty ?? ''}"
+                                data-identifier-count="${entry.IdentifierCount ?? 0}"
                             >
-                                Print
+                                ${(Number(entry.IdentifierCount || 0) > 0) ? 'View IDs' : 'Create IDs'}
                             </button>
                         </td>
                         <td>
@@ -695,6 +1055,147 @@
                         </td>
                     </tr>
                 `;
+            }
+
+            function renderItemIdentifiers(item = {}, identifiers = []) {
+                itemIdentifiersName.textContent = item.Name || 'Item Name';
+                itemIdentifiersMeta.textContent = `UPC ${item.UPC || 0} · ${item.IdentifierCount || 0} / ${item.TotalQty || 0} IDs created`;
+
+                if (!identifiers.length) {
+                    itemIdentifiersTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No identifiers created yet.</td></tr>';
+                    return;
+                }
+
+                itemIdentifiersTableBody.innerHTML = identifiers.map((identifier) => `
+                    <tr>
+                        <td>${identifier.UnitIdentifier || ''}</td>
+                        <td>${identifier.CreatedDate || 'Unknown'}</td>
+                        <td>${identifier.CreatedTime || 'Unknown'}</td>
+                        <td>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-success print-item-identifier-button"
+                                data-identifier-id="${identifier.IdentifierID || ''}"
+                            >
+                                Print
+                            </button>
+                        </td>
+                        <td>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-danger delete-item-identifier-button"
+                                data-identifier-id="${identifier.IdentifierID || ''}"
+                            >
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                itemIdentifiersTableBody.querySelectorAll('.print-item-identifier-button').forEach((button) => {
+                    bindPrintItemIdentifierButton(button);
+                });
+                itemIdentifiersTableBody.querySelectorAll('.delete-item-identifier-button').forEach((button) => {
+                    bindDeleteItemIdentifierButton(button);
+                });
+            }
+
+            function updateIdentifierButtonsForUpc(upc, identifierCount, totalQty) {
+                document.querySelectorAll(`.item-identifiers-button[data-item-upc="${upc}"]`).forEach((button) => {
+                    button.dataset.identifierCount = String(identifierCount || 0);
+                    button.dataset.itemTotalQty = String(totalQty || 0);
+                    button.textContent = Number(identifierCount || 0) > 0 ? 'View IDs' : 'Create IDs';
+                });
+            }
+
+            async function loadItemIdentifiersForUpc(upc) {
+                const response = await fetch(`{{ url_for("get_item_identifiers", upc=0) }}`.replace(/0$/, String(upc)));
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to load item identifiers.');
+                }
+                renderItemIdentifiers(result.item || {}, result.identifiers || []);
+                updateIdentifierButtonsForUpc(upc, result.item?.IdentifierCount || 0, result.item?.TotalQty || 0);
+            }
+
+            function bindItemIdentifiersButton(button) {
+                button.addEventListener('click', async () => {
+                    const upc = button.dataset.itemUpc;
+                    if (!upc) {
+                        return;
+                    }
+
+                    itemIdentifiersErrorBox.classList.add('d-none');
+                    itemIdentifiersErrorBox.textContent = '';
+                    itemIdentifiersUpcInput.value = upc;
+                    itemIdentifiersName.textContent = button.dataset.itemName || 'Item Name';
+                    itemIdentifiersMeta.textContent = `UPC ${upc} · ${button.dataset.identifierCount || 0} / ${button.dataset.itemTotalQty || 0} IDs created`;
+                    itemIdentifiersTableBody.innerHTML = '<tr><td colspan="3" class="empty-state">Loading identifiers...</td></tr>';
+                    itemIdentifiersModal.show();
+
+                    try {
+                        await loadItemIdentifiersForUpc(upc);
+                    } catch (error) {
+                        itemIdentifiersErrorBox.textContent = error.message;
+                        itemIdentifiersErrorBox.classList.remove('d-none');
+                        itemIdentifiersTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">Could not load identifiers.</td></tr>';
+                    }
+                });
+            }
+
+            function bindPrintItemIdentifierButton(button) {
+                button.addEventListener('click', async () => {
+                    const identifierId = button.dataset.identifierId;
+                    if (!identifierId) {
+                        return;
+                    }
+
+                    const response = await fetch('{{ url_for("print_item_identifier_label") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ identifier_id: identifierId })
+                    });
+
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        window.alert(result.error || 'Failed to print item identifier label.');
+                    }
+                });
+            }
+
+            function bindDeleteItemIdentifierButton(button) {
+                button.addEventListener('click', async () => {
+                    const identifierId = button.dataset.identifierId;
+                    if (!identifierId) {
+                        return;
+                    }
+
+                    const confirmed = window.confirm('Delete this identifier?');
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    itemIdentifiersErrorBox.classList.add('d-none');
+                    itemIdentifiersErrorBox.textContent = '';
+
+                    const response = await fetch('{{ url_for("delete_item_identifier_route") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ identifier_id: identifierId })
+                    });
+
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        itemIdentifiersErrorBox.textContent = result.error || 'Failed to delete item identifier.';
+                        itemIdentifiersErrorBox.classList.remove('d-none');
+                        return;
+                    }
+
+                    renderItemIdentifiers(result.item || {}, result.identifiers || []);
+                    if (result.item?.UPC) {
+                        updateIdentifierButtonsForUpc(result.item.UPC, result.item.IdentifierCount || 0, result.item.TotalQty || 0);
+                    }
+                });
             }
 
             function applyImageStatus(indicator, status) {
@@ -859,12 +1360,25 @@
                         data-storage="${bin.BinType || 'Unknown'}"
                         data-bin="${bin.BinID ?? ''}"
                         data-identifier="${bin.BinUPC ?? ''}"
+                        data-coordinates="${bin.Coordinates || ''}"
                     >
                         <td>${bin.RoomName || 'Unknown'}</td>
                         <td>${bin.WallName || 'Unknown'}</td>
                         <td>${bin.BinType || 'Unknown'}</td>
                         <td>${bin.BinID ?? 'Unknown'}</td>
                         <td>${bin.BinUPC ?? 'Unknown'}</td>
+                        <td>${bin.Coordinates || 'Unassigned'}</td>
+                        <td>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-light edit-bin-coordinates-button"
+                                data-bin-upc="${bin.BinUPC ?? ''}"
+                                data-bin-label="${bin.BinType || 'Bin'} ${bin.BinID ?? ''}".trim()
+                                data-coordinates="${bin.Coordinates || ''}"
+                            >
+                                Set Coordinates
+                            </button>
+                        </td>
                         <td>
                             <button
                                 type="button"
@@ -935,8 +1449,21 @@
                     row?.remove();
                     const rows = binsTableBody ? binsTableBody.querySelectorAll('tr[data-room]') : [];
                     if (binsTableBody && rows.length === 0) {
-                        binsTableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No bins found in the database.</td></tr>';
+                        binsTableBody.innerHTML = '<tr><td colspan="9" class="empty-state">No bins found in the database.</td></tr>';
                     }
+                });
+            }
+
+            function bindEditBinCoordinatesButton(button) {
+                button.addEventListener('click', () => {
+                    editBinCoordinatesErrorBox.classList.add('d-none');
+                    editBinCoordinatesErrorBox.textContent = '';
+                    editBinCoordinatesUpcInput.value = button.dataset.binUpc || '';
+                    editBinCoordinatesLabelInput.value = button.dataset.binLabel || 'Bin';
+                    editBinCoordinatesValueInput.value = button.dataset.coordinates || '';
+                    editCoordinatePicker?.setDisabled(false);
+                    editCoordinatePicker?.sync();
+                    editBinCoordinatesModal.show();
                 });
             }
 
@@ -1085,9 +1612,10 @@
             }
             document.querySelectorAll('.print-bin-button').forEach((button) => bindPrintBinButton(button));
             document.querySelectorAll('.delete-bin-button').forEach((button) => bindDeleteBinButton(button));
+            document.querySelectorAll('.edit-bin-coordinates-button').forEach((button) => bindEditBinCoordinatesButton(button));
 
             document.querySelectorAll('.edit-item-button').forEach((button) => bindEditButton(button));
-            document.querySelectorAll('.print-item-button').forEach((button) => bindPrintButton(button));
+            document.querySelectorAll('.item-identifiers-button').forEach((button) => bindItemIdentifiersButton(button));
             document.querySelectorAll('#inventory-table-body tr[data-item-name]').forEach((row) => startImageStatusPolling(row));
 
             [roomInput, wallInput, storageTypeInput].forEach((input) => {
@@ -1150,6 +1678,7 @@
                     }
                 }
 
+                applyInventorySearchFilter();
                 editModal.hide();
             });
 
@@ -1190,6 +1719,7 @@
                     inventoryTableBody.innerHTML = '<tr><td colspan="13" class="empty-state">No items found in the database.</td></tr>';
                 }
 
+                applyInventorySearchFilter();
                 editModal.hide();
             });
 
@@ -1202,6 +1732,7 @@
                     wall: createBinWallInput.value,
                     storage_type: createBinStorageTypeInput.value,
                     quantity: createBinQuantityInput.value,
+                    coordinates: createBinCoordinatesInput.value,
                 };
 
                 const response = await fetch('{{ url_for("create_bin") }}', {
@@ -1233,6 +1764,10 @@
                         if (newDeleteButton) {
                             bindDeleteBinButton(newDeleteButton);
                         }
+                        const newCoordinatesButton = newRow?.querySelector('.edit-bin-coordinates-button');
+                        if (newCoordinatesButton) {
+                            bindEditBinCoordinatesButton(newCoordinatesButton);
+                        }
                     });
                     sortRows(sortState.key, sortState.direction);
                     renderSortIndicators();
@@ -1240,6 +1775,68 @@
 
                 document.getElementById('create-bin-form').reset();
                 createBinModal.hide();
+            });
+
+            saveBinCoordinatesButton.addEventListener('click', async () => {
+                editBinCoordinatesErrorBox.classList.add('d-none');
+                editBinCoordinatesErrorBox.textContent = '';
+
+                const response = await fetch('{{ url_for("update_bin_coordinates") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bin_upc: editBinCoordinatesUpcInput.value,
+                        coordinates: editBinCoordinatesValueInput.value,
+                    })
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    editBinCoordinatesErrorBox.textContent = result.error || 'Failed to update bin coordinates.';
+                    editBinCoordinatesErrorBox.classList.remove('d-none');
+                    return;
+                }
+
+                const updatedBin = result.bin || {};
+                const row = binsTableBody?.querySelector(`.edit-bin-coordinates-button[data-bin-upc="${updatedBin.BinUPC}"]`)?.closest('tr');
+                if (row) {
+                    row.dataset.coordinates = updatedBin.Coordinates || '';
+                    const cells = row.querySelectorAll('td');
+                    if (cells[5]) {
+                        cells[5].textContent = updatedBin.Coordinates || 'Unassigned';
+                    }
+                    const button = row.querySelector('.edit-bin-coordinates-button');
+                    if (button) {
+                        button.dataset.coordinates = updatedBin.Coordinates || '';
+                    }
+                }
+
+                editBinCoordinatesModal.hide();
+            });
+
+            generateItemIdentifiersButton.addEventListener('click', async () => {
+                itemIdentifiersErrorBox.classList.add('d-none');
+                itemIdentifiersErrorBox.textContent = '';
+                const upc = itemIdentifiersUpcInput.value;
+                if (!upc) {
+                    return;
+                }
+
+                const response = await fetch('{{ url_for("create_item_identifiers_route") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ upc })
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    itemIdentifiersErrorBox.textContent = result.error || 'Failed to create item identifiers.';
+                    itemIdentifiersErrorBox.classList.remove('d-none');
+                    return;
+                }
+
+                renderItemIdentifiers(result.item || {}, result.identifiers || []);
+                updateIdentifierButtonsForUpc(upc, result.item?.IdentifierCount || 0, result.item?.TotalQty || 0);
             });
 
             const originalSubmitForm = window.submitForm;
@@ -1254,19 +1851,20 @@
                         const firstRow = inventoryTableBody.querySelector('tr');
                         if (firstRow) {
                             const newEditButton = firstRow.querySelector('.edit-item-button');
-                            const newPrintButton = firstRow.querySelector('.print-item-button');
                             const newImageIndicator = firstRow.querySelector('[data-image-status]');
                             if (newEditButton) {
                                 bindEditButton(newEditButton);
                             }
-                            if (newPrintButton) {
-                                bindPrintButton(newPrintButton);
+                            const newIdentifiersButton = firstRow.querySelector('.item-identifiers-button');
+                            if (newIdentifiersButton) {
+                                bindItemIdentifiersButton(newIdentifiersButton);
                             }
                             if (newImageIndicator) {
                                 bindImageStatusIndicator(newImageIndicator);
                             }
                             startImageStatusPolling(firstRow);
                         }
+                        applyInventorySearchFilter();
                     }
                     newEntryModal.hide();
                 }
@@ -1276,6 +1874,24 @@
                 document.getElementById('create-bin-form').reset();
                 createBinErrorBox.classList.add('d-none');
                 createBinErrorBox.textContent = '';
+                createCoordinatePicker?.clear();
+                syncCreateBinCoordinateAvailability();
+            });
+
+            editBinCoordinatesModalElement.addEventListener('hidden.bs.modal', () => {
+                document.getElementById('edit-bin-coordinates-form').reset();
+                editBinCoordinatesErrorBox.classList.add('d-none');
+                editBinCoordinatesErrorBox.textContent = '';
+                editCoordinatePicker?.clear();
+            });
+
+            itemIdentifiersModalElement.addEventListener('hidden.bs.modal', () => {
+                itemIdentifiersUpcInput.value = '';
+                itemIdentifiersErrorBox.classList.add('d-none');
+                itemIdentifiersErrorBox.textContent = '';
+                itemIdentifiersName.textContent = 'Item Name';
+                itemIdentifiersMeta.textContent = 'UPC 0 · 0 / 0 IDs created';
+                itemIdentifiersTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No identifiers created yet.</td></tr>';
             });
         })();
     </script>

@@ -187,11 +187,60 @@ body {
     color: var(--tertiary-light);
 }
 
+.inventory-search-wrap {
+    margin-top: 1rem;
+    width: min(360px, 100%);
+    margin-left: auto;
+}
+
+.inventory-search-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--secondary-color);
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
+.inventory-search-input {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(112, 255, 167, 0.38);
+    color: var(--dark-color);
+}
+
+.inventory-search-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(112, 255, 167, 0.18);
+}
+
+.identifier-summary {
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(112, 255, 167, 0.18);
+}
+
+.identifier-summary h6 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1rem;
+}
+
+.identifier-summary p {
+    margin-top: 0.35rem;
+    color: var(--tertiary-light);
+}
+
+.identifier-actions-row {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-start;
+}
+
 .header-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
-    align-items: center;
+    align-items: flex-end;
 }
 
 .bin-directory-panel {
@@ -258,26 +307,84 @@ body {
 #newEntryModal .modal-header,
 #newEntryModal .modal-footer,
 #createBinModal .modal-header,
-#createBinModal .modal-footer {
+#createBinModal .modal-footer,
+#editBinCoordinatesModal .modal-header,
+#editBinCoordinatesModal .modal-footer {
     border-color: var(--tertiary-color);
 }
 
 #newEntryModal .modal-title,
-#createBinModal .modal-title {
+#createBinModal .modal-title,
+#editBinCoordinatesModal .modal-title {
     color: var(--primary-color);
 }
 
 #newEntryModal label,
-#createBinModal label {
+#createBinModal label,
+#editBinCoordinatesModal label {
     color: var(--secondary-color);
 }
 
 #newEntryModal .form-control,
 #newEntryModal .form-select,
-#createBinModal .form-select {
+#createBinModal .form-select,
+#createBinModal .form-control,
+#editBinCoordinatesModal .form-control {
     background-color: #d1d1d1;
     border: 1px solid var(--secondary-color);
     color: var(--dark-color);
+}
+
+.bin-coordinate-picker {
+    border: 1px solid rgba(112, 255, 167, 0.22);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.75rem;
+}
+
+.bin-coordinate-picker.is-disabled {
+    opacity: 0.45;
+}
+
+.bin-coordinate-picker-map {
+    position: relative;
+    width: min(100%, 460px);
+    margin: 0 auto;
+    cursor: crosshair;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.bin-coordinate-picker.is-disabled .bin-coordinate-picker-map {
+    cursor: not-allowed;
+}
+
+.bin-coordinate-picker-map img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.bin-coordinate-picker-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(to right, rgba(0, 0, 0, 0.16) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.16) 1px, transparent 1px);
+    background-size: calc(100% / 48) calc(100% / 36);
+}
+
+.bin-coordinate-picker-selection {
+    position: absolute;
+    display: none;
+    width: calc(100% / 48);
+    height: calc(100% / 36);
+    border: 2px solid #d61d1d;
+    background: rgba(214, 29, 29, 0.18);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+    pointer-events: none;
 }
 
 #editItemModal .form-control,

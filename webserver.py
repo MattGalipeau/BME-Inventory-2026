@@ -59,13 +59,15 @@ HELP_BOT_BACKEND = os.getenv("HELP_BOT_BACKEND", "openai").strip().lower()
 HELP_BOT_MODEL = os.getenv("HELP_BOT_MODEL", "gpt-4o-mini")
 HELP_BOT_OLLAMA_BASE_URL = os.getenv("HELP_BOT_OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 HELP_BOT_EMBED_MODEL = os.getenv("HELP_BOT_EMBED_MODEL", "mxbai-embed-large")
-IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4o")
+IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4o-mini")
 IMAGE_AGENT_PAGE_ATTEMPTS = int(os.getenv("IMAGE_AGENT_PAGE_ATTEMPTS", "4"))
 IMAGE_AGENT_MAX_VALIDATIONS = int(os.getenv("IMAGE_AGENT_MAX_VALIDATIONS", "2"))
 IMAGE_AGENT_AI_SEARCH_FALLBACK = os.getenv("IMAGE_AGENT_AI_SEARCH_FALLBACK", "false").lower() == "true"
 ITEM_IMAGES_FILE = "item_images.json"
 ITEM_IMAGE_METADATA_FILE = "item_image_metadata.json"
 ITEM_IMAGE_CACHE_DIR = os.path.join("static", "item-images")
+BIN_COORD_COLUMN_COUNT = 48
+BIN_COORD_ROW_COUNT = 36
 _help_bot_backend = None
 _image_agent_client = None
 _item_images_lock = threading.Lock()
@@ -121,6 +123,25 @@ def ensure_tracking_tables():
                 UpdatedAt TEXT NOT NULL
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS checkout_requests(
+                RequestID INTEGER PRIMARY KEY AUTOINCREMENT,
+                SessionID INTEGER,
+                Email TEXT NOT NULL,
+                IdentifierID INTEGER NOT NULL UNIQUE,
+                UPC INTEGER NOT NULL,
+                UnitIdentifier TEXT NOT NULL,
+                ItemName TEXT NOT NULL,
+                RequestedDate TEXT NOT NULL,
+                RequestedTime TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (SessionID) REFERENCES user_sessions(SessionID),
+                FOREIGN KEY (IdentifierID) REFERENCES item_identifiers(IdentifierID),
+                FOREIGN KEY (UPC) REFERENCES items(UPC)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_requests_session ON checkout_requests (SessionID)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_requests_email ON checkout_requests (Email)")
         db.commit()
     except sqlite3.Error as e:
         db.rollback()
@@ -129,6 +150,127 @@ def ensure_tracking_tables():
         db.close()
 
 ensure_tracking_tables()
+
+def ensure_item_identifier_table():
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS item_identifiers(
+                IdentifierID INTEGER PRIMARY KEY AUTOINCREMENT,
+                UPC INTEGER NOT NULL,
+                UnitIdentifier TEXT NOT NULL UNIQUE,
+                CreatedDate TEXT NOT NULL,
+                CreatedTime TEXT NOT NULL,
+                FOREIGN KEY (UPC) REFERENCES items(UPC)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_item_identifiers_upc ON item_identifiers (UPC)")
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while ensuring item identifier table:", e.args[0])
+    finally:
+        db.close()
+
+ensure_item_identifier_table()
+
+def ensure_bin_coordinate_column():
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("PRAGMA table_info(bins)")
+        existing_columns = {row["name"] for row in cursor.fetchall()}
+        if "Coordinates" not in existing_columns:
+            cursor.execute("ALTER TABLE bins ADD COLUMN Coordinates TEXT")
+            db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while ensuring bin coordinates column:", e.args[0])
+    finally:
+        db.close()
+
+ensure_bin_coordinate_column()
+
+def build_bin_coord_columns(count):
+    labels = []
+    for index in range(count):
+        label = ""
+        number = index
+        while True:
+            number, remainder = divmod(number, 26)
+            label = chr(65 + remainder) + label
+            if number == 0:
+                break
+            number -= 1
+        labels.append(label)
+    return labels
+
+BIN_COORD_COLUMNS = build_bin_coord_columns(BIN_COORD_COLUMN_COUNT)
+BIN_COORD_ROWS = list(range(1, BIN_COORD_ROW_COUNT + 1))
+
+def normalize_bin_coordinates(value):
+    raw = (value or "").strip().upper()
+    if not raw:
+        return ""
+
+    match = re.fullmatch(r"([A-Z]{1,2})\s*-?\s*([1-9]|[1-2][0-9]|3[0-6])", raw)
+    if not match:
+        return None
+
+    column_label = match.group(1)
+    row_label = match.group(2)
+    if column_label not in BIN_COORD_COLUMNS:
+        return None
+
+    return f"{column_label}{row_label}"
+
+def parse_bin_coordinates(value):
+    normalized = normalize_bin_coordinates(value)
+    if not normalized:
+        return None
+
+    match = re.fullmatch(r"([A-Z]{1,2})([1-9]|[1-2][0-9]|3[0-6])", normalized)
+    if not match:
+        return None
+
+    column_label = match.group(1)
+    row_number = int(match.group(2))
+    return {
+        "label": normalized,
+        "column_label": column_label,
+        "column_index": BIN_COORD_COLUMNS.index(column_label),
+        "row_number": row_number,
+        "row_index": row_number - 1,
+    }
+
+def parse_item_bin_coordinate_list(raw_value):
+    coordinates = []
+    seen = set()
+
+    for part in (raw_value or "").split(","):
+        parsed = parse_bin_coordinates(part)
+        if not parsed:
+            continue
+        label = parsed["label"]
+        if label in seen:
+            continue
+        seen.add(label)
+        coordinates.append(parsed)
+
+    return coordinates
+
+def coerce_int_list(values):
+    coerced = []
+    for value in values or []:
+        text = str(value).strip()
+        if not text:
+            continue
+        try:
+            coerced.append(int(text))
+        except (TypeError, ValueError):
+            continue
+    return coerced
 
 def is_signed_in():
     return bool((session.get("signed_in_email") or "").strip())
@@ -227,14 +369,22 @@ def load_database_entries():
                 ib.Qty,
                 ib.Date,
                 ib.Time,
+                i.TotalQty,
                 b.BinID,
                 b.BinType,
                 w.WallName,
-                r.RoomName
+                r.RoomName,
+                COALESCE(id_counts.IdentifierCount, 0) AS IdentifierCount
             FROM item_bin ib
+            LEFT JOIN items i ON i.UPC = ib.UPC
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN (
+                SELECT UPC, COUNT(*) AS IdentifierCount
+                FROM item_identifiers
+                GROUP BY UPC
+            ) id_counts ON id_counts.UPC = ib.UPC
             ORDER BY
                 datetime(ib.Date || ' ' || ib.Time) DESC,
                 ib.EntryID DESC
@@ -251,6 +401,107 @@ def load_database_entries():
 
     return entries
 
+def load_item_identifiers(upc):
+    db = get_db()
+    cursor = db.cursor()
+    identifiers = []
+    try:
+        cursor.execute("""
+            SELECT IdentifierID, UPC, UnitIdentifier, CreatedDate, CreatedTime
+            FROM item_identifiers
+            WHERE UPC = ?
+            ORDER BY UnitIdentifier
+        """, (upc,))
+        identifiers = [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print("An error occurred while loading item identifiers:", e.args[0])
+    finally:
+        db.close()
+
+    return identifiers
+
+def load_item_identifier_summary(upc):
+    db = get_db()
+    cursor = db.cursor()
+    summary = None
+    try:
+        cursor.execute("""
+            SELECT i.UPC, i.Name, i.TotalQty, COUNT(ii.IdentifierID) AS IdentifierCount
+            FROM items i
+            LEFT JOIN item_identifiers ii ON ii.UPC = i.UPC
+            WHERE i.UPC = ?
+            GROUP BY i.UPC, i.Name, i.TotalQty
+        """, (upc,))
+        row = cursor.fetchone()
+        if row:
+            summary = dict(row)
+    except sqlite3.Error as e:
+        print("An error occurred while loading item identifier summary:", e.args[0])
+    finally:
+        db.close()
+
+    return summary
+
+def create_item_identifiers(upc):
+    db = get_db()
+    cursor = db.cursor()
+    created = []
+    try:
+        cursor.execute("SELECT Name, TotalQty FROM items WHERE UPC = ?", (upc,))
+        item_row = cursor.fetchone()
+        if not item_row:
+            return None, "Item not found."
+
+        total_qty = int(item_row["TotalQty"] or 0)
+        if total_qty < 1:
+            return None, "Item quantity must be at least 1 to create identifiers."
+
+        cursor.execute("SELECT UnitIdentifier FROM item_identifiers WHERE UPC = ?", (upc,))
+        existing_identifiers = [row["UnitIdentifier"] for row in cursor.fetchall()]
+        existing_count = len(existing_identifiers)
+        if existing_count >= total_qty:
+            db.commit()
+            return [], None
+
+        name_letters = re.sub(r"[^A-Z0-9]", "", (item_row["Name"] or "").upper())
+        identifier_prefix = (name_letters[:3] if len(name_letters) >= 3 else name_letters.ljust(3, "X"))
+        suffixes = []
+        pattern = re.compile(rf"^{re.escape(identifier_prefix)}(\d{{3}})$")
+        for identifier in existing_identifiers:
+            match = pattern.match(identifier or "")
+            if match:
+                suffixes.append(int(match.group(1)))
+        used_suffixes = set(suffixes)
+        next_suffix = 0
+
+        now = datetime.now()
+        created_date = now.strftime("%Y-%m-%d")
+        created_time = now.strftime("%H:%M:%S")
+        for _ in range(total_qty - existing_count):
+            while next_suffix in used_suffixes:
+                next_suffix += 1
+            unit_identifier = f"{identifier_prefix}{next_suffix:03d}"
+            cursor.execute("""
+                INSERT INTO item_identifiers (UPC, UnitIdentifier, CreatedDate, CreatedTime)
+                VALUES (?, ?, ?, ?)
+            """, (upc, unit_identifier, created_date, created_time))
+            created.append(unit_identifier)
+            used_suffixes.add(next_suffix)
+            next_suffix += 1
+
+        db.commit()
+        return created, None
+    except sqlite3.IntegrityError as e:
+        db.rollback()
+        print("An integrity error occurred while creating item identifiers:", e.args[0])
+        return None, "Could not create unique identifiers for this item."
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while creating item identifiers:", e.args[0])
+        return None, "Failed to create item identifiers."
+    finally:
+        db.close()
+
 def load_user_tracking(limit=100):
     db = get_db()
     cursor = db.cursor()
@@ -264,14 +515,20 @@ def load_user_tracking(limit=100):
                 s.SignInTime,
                 s.SignOutDate,
                 s.SignOutTime,
-                COUNT(a.AccessID) AS AccessCount,
+                COUNT(DISTINCT a.AccessID) AS AccessCount,
                 GROUP_CONCAT(
                     DISTINCT CASE
                         WHEN a.ItemName IS NOT NULL AND a.ItemName != '' THEN a.ItemName
                     END
-                ) AS AccessedItems
+                ) AS AccessedItems,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN c.UnitIdentifier IS NOT NULL AND c.UnitIdentifier != '' THEN c.UnitIdentifier
+                    END
+                ) AS CheckedOut
             FROM user_sessions s
             LEFT JOIN user_item_access a ON a.SessionID = s.SessionID
+            LEFT JOIN checkout_requests c ON c.SessionID = s.SessionID AND c.IsActive = 1
             GROUP BY
                 s.SessionID,
                 s.Email,
@@ -290,6 +547,187 @@ def load_user_tracking(limit=100):
         db.close()
 
     return sessions
+
+def load_checkout_request_items(current_email=""):
+    current_email = (current_email or "").strip().lower()
+    db = get_db()
+    cursor = db.cursor()
+    items_by_upc = {}
+    try:
+        cursor.execute("""
+            SELECT
+                i.UPC,
+                i.Name,
+                i.TotalQty,
+                ii.IdentifierID,
+                ii.UnitIdentifier,
+                ii.CreatedDate,
+                ii.CreatedTime,
+                c.Email AS CheckedOutBy,
+                c.RequestedDate,
+                c.RequestedTime
+            FROM items i
+            INNER JOIN item_identifiers ii ON ii.UPC = i.UPC
+            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            ORDER BY i.Name COLLATE NOCASE, ii.UnitIdentifier
+        """)
+        for row in cursor.fetchall():
+            record = dict(row)
+            upc = record["UPC"]
+            item = items_by_upc.setdefault(upc, {
+                "UPC": upc,
+                "Name": record.get("Name") or "Unknown Item",
+                "TotalQty": record.get("TotalQty") or 0,
+                "Identifiers": [],
+            })
+            item["Identifiers"].append({
+                "IdentifierID": record.get("IdentifierID"),
+                "UnitIdentifier": record.get("UnitIdentifier") or "",
+                "CreatedDate": record.get("CreatedDate") or "",
+                "CreatedTime": record.get("CreatedTime") or "",
+                "CheckedOutBy": record.get("CheckedOutBy") or "",
+                "RequestedDate": record.get("RequestedDate") or "",
+                "RequestedTime": record.get("RequestedTime") or "",
+                "IsCheckedOut": bool(record.get("CheckedOutBy")),
+                "IsCheckedOutByCurrentUser": bool(record.get("CheckedOutBy")) and (record.get("CheckedOutBy") or "").strip().lower() == current_email,
+            })
+    except sqlite3.Error as e:
+        print("An error occurred while loading checkout request items:", e.args[0])
+    finally:
+        db.close()
+
+    return list(items_by_upc.values())
+
+def return_checkout_request(identifier_id, email):
+    email = (email or "").strip().lower()
+    if not email:
+        return None, "You must be signed in to return a checkout."
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            SELECT IdentifierID, UnitIdentifier, Email
+            FROM checkout_requests
+            WHERE IdentifierID = ? AND IsActive = 1
+        """, (identifier_id,))
+        row = cursor.fetchone()
+        if not row:
+            return {
+                "IdentifierID": identifier_id,
+                "CheckedOutBy": "",
+                "RequestedDate": "",
+                "RequestedTime": "",
+                "IsCheckedOutByCurrentUser": False,
+            }, "This identifier is not currently checked out."
+
+        record = dict(row)
+        checked_out_by = (record.get("Email") or "").strip().lower()
+        if checked_out_by != email:
+            return {
+                "IdentifierID": record["IdentifierID"],
+                "UnitIdentifier": record.get("UnitIdentifier") or "",
+                "CheckedOutBy": record.get("Email") or "",
+                "RequestedDate": "",
+                "RequestedTime": "",
+                "IsCheckedOutByCurrentUser": False,
+            }, "Only the user who checked out this identifier can return it."
+
+        cursor.execute("DELETE FROM checkout_requests WHERE IdentifierID = ? AND IsActive = 1", (identifier_id,))
+        db.commit()
+        return {
+            "IdentifierID": record["IdentifierID"],
+            "UnitIdentifier": record.get("UnitIdentifier") or "",
+            "CheckedOutBy": "",
+            "RequestedDate": "",
+            "RequestedTime": "",
+            "IsCheckedOutByCurrentUser": False,
+        }, None
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while returning checkout request:", e.args[0])
+        return None, "Failed to return checkout request."
+    finally:
+        db.close()
+
+def create_checkout_request(identifier_id, email, session_id):
+    email = (email or "").strip().lower()
+    if not email:
+        return None, "You must be signed in to request a checkout."
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                ii.IdentifierID,
+                ii.UPC,
+                ii.UnitIdentifier,
+                i.Name,
+                c.Email AS CheckedOutBy,
+                c.RequestedDate,
+                c.RequestedTime
+            FROM item_identifiers ii
+            INNER JOIN items i ON i.UPC = ii.UPC
+            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            WHERE ii.IdentifierID = ?
+        """, (identifier_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None, "Identifier not found."
+
+        record = dict(row)
+        if record.get("CheckedOutBy"):
+            return {
+                "IdentifierID": record["IdentifierID"],
+                "UnitIdentifier": record["UnitIdentifier"],
+                "CheckedOutBy": record["CheckedOutBy"],
+                "RequestedDate": record.get("RequestedDate") or "",
+                "RequestedTime": record.get("RequestedTime") or "",
+            }, "This identifier has already been requested."
+
+        now = datetime.now()
+        requested_date = now.strftime("%Y-%m-%d")
+        requested_time = now.strftime("%H:%M:%S")
+        cursor.execute("""
+            INSERT INTO checkout_requests (
+                SessionID,
+                Email,
+                IdentifierID,
+                UPC,
+                UnitIdentifier,
+                ItemName,
+                RequestedDate,
+                RequestedTime,
+                IsActive
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (
+            session_id,
+            email,
+            record["IdentifierID"],
+            record["UPC"],
+            record["UnitIdentifier"],
+            record["Name"],
+            requested_date,
+            requested_time,
+        ))
+        db.commit()
+        return {
+            "IdentifierID": record["IdentifierID"],
+            "UnitIdentifier": record["UnitIdentifier"],
+            "CheckedOutBy": email,
+            "RequestedDate": requested_date,
+            "RequestedTime": requested_time,
+        }, None
+    except sqlite3.IntegrityError:
+        db.rollback()
+        return None, "This identifier has already been requested."
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while creating checkout request:", e.args[0])
+        return None, "Failed to create checkout request."
+    finally:
+        db.close()
 
 def log_user_sign_in(email):
     email = (email or "").strip()
@@ -389,14 +827,22 @@ def load_database_entry(entry_id):
                 ib.Qty,
                 ib.Date,
                 ib.Time,
+                i.TotalQty,
                 b.BinType,
                 b.BinID,
                 w.WallName,
-                r.RoomName
+                r.RoomName,
+                COALESCE(id_counts.IdentifierCount, 0) AS IdentifierCount
             FROM item_bin ib
+            LEFT JOIN items i ON i.UPC = ib.UPC
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN (
+                SELECT UPC, COUNT(*) AS IdentifierCount
+                FROM item_identifiers
+                GROUP BY UPC
+            ) id_counts ON id_counts.UPC = ib.UPC
             WHERE ib.EntryID = ?
         """, (entry_id,))
         row = cursor.fetchone()
@@ -422,6 +868,7 @@ def load_bins_directory():
                 b.BinUPC,
                 b.BinID,
                 b.BinType,
+                b.Coordinates,
                 w.WallName,
                 r.RoomName
             FROM bins b
@@ -452,6 +899,7 @@ def load_bin_row(bin_upc):
                 b.BinUPC,
                 b.BinID,
                 b.BinType,
+                b.Coordinates,
                 w.WallName,
                 r.RoomName
             FROM bins b
@@ -468,6 +916,41 @@ def load_bin_row(bin_upc):
         db.close()
 
     return bin_row
+
+def load_floorplan_bin_markers():
+    db = get_db()
+    cursor = db.cursor()
+    markers = []
+    try:
+        cursor.execute("""
+            SELECT
+                b.BinUPC,
+                b.BinID,
+                b.BinType,
+                b.Coordinates,
+                w.WallName,
+                r.RoomName
+            FROM bins b
+            LEFT JOIN walls w ON w.WallID = b.WallID
+            LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            WHERE b.Coordinates IS NOT NULL AND TRIM(b.Coordinates) != ''
+            ORDER BY r.RoomName, w.WallName, b.BinType, b.BinID
+        """)
+        for row in cursor.fetchall():
+            marker = dict(row)
+            parsed = parse_bin_coordinates(marker.get("Coordinates"))
+            if not parsed:
+                continue
+            marker["Coordinates"] = parsed["label"]
+            marker["GridColumn"] = parsed["column_index"]
+            marker["GridRow"] = parsed["row_index"]
+            markers.append(marker)
+    except sqlite3.Error as e:
+        print("An error occurred while loading floorplan bin markers:", e.args[0])
+    finally:
+        db.close()
+
+    return markers
 
 def load_help_inventory_snapshot():
     db = get_db()
@@ -759,7 +1242,12 @@ def load_recently_changed_items(limit=5):
                     DISTINCT CASE
                         WHEN r.RoomName IS NOT NULL THEN r.RoomName
                     END
-                ) AS Rooms
+                ) AS Rooms,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN b.Coordinates IS NOT NULL AND TRIM(b.Coordinates) != '' THEN b.Coordinates
+                    END
+                ) AS BinCoordinates
             FROM items i
             JOIN item_bin ib ON ib.UPC = i.UPC
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
@@ -777,6 +1265,10 @@ def load_recently_changed_items(limit=5):
 
     for item in items:
         item["Thumbnail"] = get_item_image_url(item["Name"])
+        parsed_coordinates = parse_item_bin_coordinate_list(item.get("BinCoordinates"))
+        primary_coordinate = parsed_coordinates[0] if parsed_coordinates else None
+        item["PrimaryCoordinate"] = primary_coordinate["label"] if primary_coordinate else ""
+        item["BinCoordinates"] = ", ".join(coord["label"] for coord in parsed_coordinates)
 
     return items
 
@@ -985,7 +1477,7 @@ def load_search_cards(search_query="", upcs=None):
     db = get_db()
     cursor = db.cursor()
     results = []
-    upc_values = [int(upc) for upc in (upcs or []) if str(upc).strip()]
+    upc_values = coerce_int_list(upcs)
     try:
         if upc_values:
             placeholders = ",".join("?" for _ in upc_values)
@@ -1012,6 +1504,11 @@ def load_search_cards(search_query="", upcs=None):
                                 r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                         END
                     ) AS LocationDetails,
+                    GROUP_CONCAT(
+                        DISTINCT CASE
+                            WHEN b.Coordinates IS NOT NULL AND TRIM(b.Coordinates) != '' THEN b.Coordinates
+                        END
+                    ) AS BinCoordinates,
                     MAX(datetime(ib.Date || ' ' || ib.Time)) AS LastChanged
                 FROM items i
                 LEFT JOIN item_bin ib ON ib.UPC = i.UPC
@@ -1048,6 +1545,11 @@ def load_search_cards(search_query="", upcs=None):
                                 r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                         END
                     ) AS LocationDetails,
+                    GROUP_CONCAT(
+                        DISTINCT CASE
+                            WHEN b.Coordinates IS NOT NULL AND TRIM(b.Coordinates) != '' THEN b.Coordinates
+                        END
+                    ) AS BinCoordinates,
                     MAX(datetime(ib.Date || ' ' || ib.Time)) AS LastChanged
                 FROM items i
                 LEFT JOIN item_bin ib ON ib.UPC = i.UPC
@@ -1083,6 +1585,10 @@ def load_search_cards(search_query="", upcs=None):
 
     for item in results:
         item["Thumbnail"] = get_item_image_url(item.get("Name"))
+        parsed_coordinates = parse_item_bin_coordinate_list(item.get("BinCoordinates"))
+        primary_coordinate = parsed_coordinates[0] if parsed_coordinates else None
+        item["PrimaryCoordinate"] = primary_coordinate["label"] if primary_coordinate else ""
+        item["BinCoordinates"] = ", ".join(coord["label"] for coord in parsed_coordinates)
 
     return results
 
@@ -3261,7 +3767,21 @@ def database_auth():
 def floorplan():
     game_state, candidates = ensure_floorplan_game_state()
     current_item = get_floorplan_target_candidate(candidates, game_state.get("target_upc"))
-    return render_template('floorplan.html', game_state=game_state, current_item=current_item)
+    return render_template(
+        'floorplan.html',
+        game_state=game_state,
+        current_item=current_item,
+        bin_markers=load_floorplan_bin_markers(),
+        bin_coord_columns=BIN_COORD_COLUMNS,
+        bin_coord_rows=BIN_COORD_ROWS,
+    )
+
+@app.route('/checkout-request', methods=['GET'])
+def checkout_request():
+    return render_template(
+        'checkout_request.html',
+        checkout_items=load_checkout_request_items(session.get("signed_in_email", "")),
+    )
 
 @app.route('/floorplan-guess', methods=['POST'])
 def floorplan_guess():
@@ -3542,6 +4062,182 @@ def print_item_label():
 
     return jsonify({"success": True}), 200
 
+@app.route('/print-item-identifier-label', methods=['POST'])
+def print_item_identifier_label():
+    data = request.get_json(silent=True) or {}
+    identifier_id = data.get('identifier_id')
+
+    if not identifier_id:
+        return jsonify({"error": "Missing identifier ID"}), 400
+
+    try:
+        identifier_id = int(identifier_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Identifier ID must be numeric"}), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT UnitIdentifier FROM item_identifiers WHERE IdentifierID = ?",
+            (identifier_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Identifier not found"}), 404
+        unit_identifier = row["UnitIdentifier"]
+    finally:
+        db.close()
+
+    try:
+        functions.printItemUPC(unit_identifier)
+    except Exception as exc:
+        print("An error occurred while printing item identifier label:", exc)
+        return jsonify({"error": "Failed to print item identifier label"}), 500
+
+    return jsonify({"success": True}), 200
+
+@app.route('/checkout-request-item', methods=['POST'])
+def checkout_request_item():
+    data = request.get_json(silent=True) or {}
+    identifier_id = data.get('identifier_id')
+
+    if not identifier_id:
+        return jsonify({"error": "Missing identifier ID"}), 400
+
+    try:
+        identifier_id = int(identifier_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Identifier ID must be numeric"}), 400
+
+    email = (session.get("signed_in_email") or "").strip().lower()
+    if not email:
+        return jsonify({"error": "You must be signed in to request a checkout."}), 401
+
+    tracked_session_id = session.get("tracked_session_id")
+    if not tracked_session_id:
+        tracked_session_id = log_user_sign_in(email)
+        if tracked_session_id:
+            session["tracked_session_id"] = tracked_session_id
+
+    result, error = create_checkout_request(identifier_id, email, tracked_session_id)
+    if error:
+        status_code = 409 if result else 400
+        return jsonify({
+            "error": error,
+            "identifier": result or {},
+        }), status_code
+
+    return jsonify({
+        "success": True,
+        "identifier": result,
+    }), 200
+
+@app.route('/return-checkout-item', methods=['POST'])
+def return_checkout_item():
+    data = request.get_json(silent=True) or {}
+    identifier_id = data.get('identifier_id')
+
+    if not identifier_id:
+        return jsonify({"error": "Missing identifier ID"}), 400
+
+    try:
+        identifier_id = int(identifier_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Identifier ID must be numeric"}), 400
+
+    email = (session.get("signed_in_email") or "").strip().lower()
+    if not email:
+        return jsonify({"error": "You must be signed in to return a checkout."}), 401
+
+    result, error = return_checkout_request(identifier_id, email)
+    if error:
+        status_code = 403 if result and result.get("CheckedOutBy") else 400
+        return jsonify({
+            "error": error,
+            "identifier": result or {},
+        }), status_code
+
+    return jsonify({
+        "success": True,
+        "identifier": result,
+    }), 200
+
+@app.route('/item-identifiers/<int:upc>', methods=['GET'])
+def get_item_identifiers(upc):
+    summary = load_item_identifier_summary(upc)
+    if not summary:
+        return jsonify({"error": "Item not found"}), 404
+
+    return jsonify({
+        "item": summary,
+        "identifiers": load_item_identifiers(upc),
+    }), 200
+
+@app.route('/create-item-identifiers', methods=['POST'])
+def create_item_identifiers_route():
+    data = request.get_json(silent=True) or {}
+    upc = data.get('upc')
+
+    if not upc:
+        return jsonify({"error": "Missing UPC"}), 400
+
+    try:
+        upc = int(upc)
+    except (TypeError, ValueError):
+        return jsonify({"error": "UPC must be numeric"}), 400
+
+    created, error = create_item_identifiers(upc)
+    if error:
+        return jsonify({"error": error}), 400
+
+    summary = load_item_identifier_summary(upc)
+    return jsonify({
+        "success": True,
+        "created_count": len(created or []),
+        "item": summary,
+        "identifiers": load_item_identifiers(upc),
+    }), 200
+
+@app.route('/delete-item-identifier', methods=['POST'])
+def delete_item_identifier_route():
+    data = request.get_json(silent=True) or {}
+    identifier_id = data.get('identifier_id')
+
+    if not identifier_id:
+        return jsonify({"error": "Missing identifier ID"}), 400
+
+    try:
+        identifier_id = int(identifier_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Identifier ID must be numeric"}), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    deleted_upc = None
+    try:
+        cursor.execute("SELECT UPC FROM item_identifiers WHERE IdentifierID = ?", (identifier_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Identifier not found"}), 404
+
+        deleted_upc = row["UPC"]
+        cursor.execute("DELETE FROM item_identifiers WHERE IdentifierID = ?", (identifier_id,))
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while deleting item identifier:", e.args[0])
+        return jsonify({"error": "Failed to delete item identifier"}), 500
+    finally:
+        db.close()
+
+    summary = load_item_identifier_summary(deleted_upc)
+    return jsonify({
+        "success": True,
+        "item": summary,
+        "identifiers": load_item_identifiers(deleted_upc),
+    }), 200
+
 @app.route('/print-bin-label', methods=['POST'])
 def print_bin_label():
     data = request.get_json(silent=True) or {}
@@ -3583,6 +4279,7 @@ def create_bin():
     wall = (data.get('wall') or '').strip()
     storage_type = (data.get('storage_type') or '').strip()
     quantity = data.get('quantity', 1)
+    coordinates = normalize_bin_coordinates(data.get('coordinates', ''))
 
     if not room or not wall or not storage_type:
         return jsonify({"error": "Missing required fields"}), 400
@@ -3601,9 +4298,13 @@ def create_bin():
 
     if quantity < 1 or quantity > 100:
         return jsonify({"error": "Quantity must be between 1 and 100"}), 400
+    if data.get('coordinates') and coordinates is None:
+        return jsonify({"error": "Coordinates must use A1 through AV36 format."}), 400
+    if coordinates and quantity != 1:
+        return jsonify({"error": "Coordinates can only be set during single-bin creation."}), 400
 
     try:
-        created_pairs = functions.createBins(storage_type, wall, room, quantity=quantity)
+        created_pairs = functions.createBins(storage_type, wall, room, quantity=quantity, coordinates=coordinates or None)
     except Exception as exc:
         print("An error occurred while creating bin:", exc)
         return jsonify({"error": "Failed to create bin"}), 500
@@ -3622,6 +4323,46 @@ def create_bin():
         "bins": created_bins,
         "quantity": len(created_bins),
     }), 200
+
+@app.route('/update-bin-coordinates', methods=['POST'])
+def update_bin_coordinates():
+    data = request.get_json(silent=True) or {}
+    bin_upc = data.get('bin_upc')
+    normalized_coordinates = normalize_bin_coordinates(data.get('coordinates', ''))
+
+    if not bin_upc:
+        return jsonify({"error": "Missing bin identifier"}), 400
+
+    try:
+        bin_upc = int(bin_upc)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Bin identifier must be numeric"}), 400
+
+    if data.get('coordinates') and normalized_coordinates is None:
+        return jsonify({"error": "Coordinates must use A1 through AV36 format."}), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("SELECT BinUPC FROM bins WHERE BinUPC = ?", (bin_upc,))
+        existing_bin = cursor.fetchone()
+        if not existing_bin:
+            return jsonify({"error": "Bin not found"}), 404
+
+        cursor.execute(
+            "UPDATE bins SET Coordinates = ? WHERE BinUPC = ?",
+            (normalized_coordinates or None, bin_upc)
+        )
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while updating bin coordinates:", e.args[0])
+        return jsonify({"error": "Failed to update bin coordinates"}), 500
+    finally:
+        db.close()
+
+    updated_bin = load_bin_row(bin_upc)
+    return jsonify({"success": True, "bin": updated_bin}), 200
 
 @app.route('/delete-bin', methods=['POST'])
 def delete_bin():

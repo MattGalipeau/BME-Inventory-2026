@@ -1,0 +1,250 @@
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(to bottom, var(--dark-color), #444);
+    color: #f4fbf7;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+:root {
+    --primary-dark: #32714a;
+    --primary-color: #70ffa7;
+    --secondary-color: #bbffd5;
+    --light-color: #ffffff;
+    --dark-color: #3c3c3c;
+}
+
+.navbar {
+    background: linear-gradient(to top, var(--dark-color), var(--primary-dark));
+}
+
+.container-fluid {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0 1rem;
+}
+
+.navbar-brand {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 2rem;
+}
+
+.navbar-brand:hover {
+    color: var(--secondary-color);
+}
+
+.ms-auto {
+    margin-left: auto;
+}
+
+.navbar-nav {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 7vh;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    margin: 0 30px;
+    font-size: 1.25rem;
+}
+
+.nav-link {
+    color: var(--light-color);
+    text-decoration: none;
+    position: relative;
+}
+
+.nav-link::after {
+    content: '';
+    display: flex;
+    margin: auto;
+    width: 0;
+    height: 2px;
+    background: var(--primary-color);
+    transition: width .3s;
+}
+
+.nav-link:hover::after {
+    width: 100%;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    color: var(--secondary-color) !important;
+}
+
+.nav-user-email {
+    display: inline-flex;
+    align-items: center;
+    color: var(--secondary-color);
+    cursor: default;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.sign-out-form {
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.sign-out-button {
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: var(--light-color);
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.sign-out-button::after {
+    display: none;
+}
+
+.sign-out-button:hover::after {
+    width: 0;
+}
+
+.sign-out-button:hover {
+    color: var(--secondary-color) !important;
+}
+
+.checkout-wrapper {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 2.5rem;
+}
+
+.checkout-card {
+    background: rgba(13, 24, 20, 0.9);
+    border: 1px solid rgba(143, 186, 162, 0.18);
+    border-radius: 18px;
+    padding: 1.5rem;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
+}
+
+.checkout-header h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.checkout-header p {
+    margin: 0.45rem 0 0;
+    color: rgba(244, 251, 247, 0.72);
+}
+
+.checkout-groups {
+    margin-top: 1.25rem;
+    display: grid;
+    gap: 1rem;
+}
+
+.checkout-group {
+    background: rgba(22, 37, 31, 0.78);
+    border: 1px solid rgba(143, 186, 162, 0.14);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.checkout-group-summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
+}
+
+.checkout-group-summary::-webkit-details-marker {
+    display: none;
+}
+
+.checkout-group-summary h2 {
+    margin: 0;
+    font-size: 1.18rem;
+}
+
+.checkout-group-summary p {
+    margin: 0.3rem 0 0;
+    color: rgba(244, 251, 247, 0.66);
+    font-size: 0.92rem;
+}
+
+.summary-hint {
+    color: #79efad;
+    font-size: 0.92rem;
+    white-space: nowrap;
+}
+
+.checkout-table {
+    margin-bottom: 0;
+}
+
+.checkout-table td,
+.checkout-table th {
+    vertical-align: middle;
+}
+
+.status-meta {
+    display: block;
+    margin-top: 0.2rem;
+    color: rgba(244, 251, 247, 0.58);
+    font-size: 0.82rem;
+}
+
+.empty-state {
+    padding: 2rem 1rem;
+    color: rgba(244, 251, 247, 0.72);
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .navbar-brand {
+        font-size: 1.4rem;
+    }
+
+    .container-fluid {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ms-auto {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .navbar-nav {
+        height: auto;
+        flex-wrap: wrap;
+    }
+
+    .nav-item {
+        margin: 0 10px;
+        font-size: 1rem;
+    }
+
+    .checkout-wrapper {
+        padding: 1.1rem;
+    }
+
+    .checkout-card {
+        padding: 1.1rem;
+    }
+
+    .checkout-group-summary {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

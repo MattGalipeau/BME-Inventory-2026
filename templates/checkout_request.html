@@ -1,0 +1,207 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='checkout.css') }}">
+    <title>BMEnventory Checkout Request</title>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">BMEnventory</a>
+            <div class="ms-auto">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Search</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/floorplan">ItemGuessr</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/checkout-request">Checkout Request</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/db" data-protected-link data-authenticated="{{ 'true' if database_authenticated else 'false' }}" data-auth-url="{{ url_for('database_auth') }}">Database <span aria-hidden="true">{{ '🔓' if database_authenticated else '🔒' }}</span></a>
+                    </li>
+                    <li class="nav-item nav-user">
+                        <span class="nav-link nav-user-email">{{ signed_in_email }}</span>
+                    </li>
+                    <li class="nav-item nav-sign-out">
+                        <form method="post" action="{{ url_for('sign_out') }}" class="sign-out-form">
+                            <button type="submit" class="nav-link sign-out-button">Sign Out</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="checkout-wrapper">
+        <section class="checkout-card">
+            <div class="checkout-header">
+                <div>
+                    <h1>Checkout Request</h1>
+                    <p>Students can request checkout only for items that have individual identifiers.</p>
+                </div>
+            </div>
+
+            <div id="checkout-feedback" class="alert d-none" role="alert"></div>
+
+            {% if checkout_items %}
+                <div class="checkout-groups">
+                    {% for item in checkout_items %}
+                    <details class="checkout-group">
+                        <summary class="checkout-group-summary">
+                            <div>
+                                <h2>{{ item.Name }}</h2>
+                                <p>UPC {{ item.UPC }} · {{ item.Identifiers|length }} identifier{{ '' if item.Identifiers|length == 1 else 's' }}</p>
+                            </div>
+                            <span class="summary-hint">Show IDs</span>
+                        </summary>
+
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0 align-middle checkout-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Identifier</th>
+                                        <th scope="col">Status</th>
+                                        <th scope="col">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for identifier in item.Identifiers %}
+                                    <tr data-identifier-row data-identifier-id="{{ identifier.IdentifierID }}">
+                                        <td>{{ identifier.UnitIdentifier }}</td>
+                                        <td class="checkout-status-cell">
+                                            {% if identifier.CheckedOutBy %}
+                                                Requested by {{ identifier.CheckedOutBy }}
+                                                {% if identifier.RequestedDate or identifier.RequestedTime %}
+                                                    <span class="status-meta">on {{ identifier.RequestedDate }} {{ identifier.RequestedTime }}</span>
+                                                {% endif %}
+                                            {% else %}
+                                                Available
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm {{ 'btn-outline-warning' if identifier.IsCheckedOutByCurrentUser else 'btn-outline-success' }} checkout-identifier-button"
+                                                data-identifier-id="{{ identifier.IdentifierID }}"
+                                                data-action="{{ 'return' if identifier.IsCheckedOutByCurrentUser else 'checkout' }}"
+                                                {% if identifier.CheckedOutBy and not identifier.IsCheckedOutByCurrentUser %}disabled{% endif %}
+                                            >
+                                                {% if identifier.IsCheckedOutByCurrentUser %}
+                                                    Return
+                                                {% elif identifier.CheckedOutBy %}
+                                                    Unavailable
+                                                {% else %}
+                                                    Checkout
+                                                {% endif %}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    No uniquely identified items are available for checkout requests yet.
+                </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <script>
+        (() => {
+            const feedbackBox = document.getElementById('checkout-feedback');
+
+            function showFeedback(message, level) {
+                if (!feedbackBox) {
+                    return;
+                }
+                feedbackBox.textContent = message || '';
+                feedbackBox.className = `alert alert-${level} ${message ? '' : 'd-none'}`;
+            }
+
+            function updateIdentifierRow(button, identifier = {}) {
+                const row = button.closest('[data-identifier-row]');
+                if (!row) {
+                    return;
+                }
+
+                const statusCell = row.querySelector('.checkout-status-cell');
+                const checkedOutBy = identifier.CheckedOutBy || '';
+                const requestedDate = identifier.RequestedDate || '';
+                const requestedTime = identifier.RequestedTime || '';
+                const checkedOutByCurrentUser = Boolean(identifier.IsCheckedOutByCurrentUser);
+
+                if (statusCell) {
+                    if (checkedOutBy) {
+                        statusCell.innerHTML = `Requested by ${checkedOutBy}${(requestedDate || requestedTime) ? `<span class="status-meta">on ${requestedDate} ${requestedTime}</span>` : ''}`;
+                    } else {
+                        statusCell.textContent = 'Available';
+                    }
+                }
+
+                button.dataset.action = checkedOutByCurrentUser ? 'return' : 'checkout';
+                button.disabled = Boolean(checkedOutBy) && !checkedOutByCurrentUser;
+                button.classList.remove('btn-outline-success', 'btn-outline-warning');
+
+                if (checkedOutByCurrentUser) {
+                    button.textContent = 'Return';
+                    button.classList.add('btn-outline-warning');
+                } else if (checkedOutBy) {
+                    button.textContent = 'Unavailable';
+                    button.classList.add('btn-outline-success');
+                } else {
+                    button.textContent = 'Checkout';
+                    button.classList.add('btn-outline-success');
+                }
+            }
+
+            document.querySelectorAll('.checkout-identifier-button').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const identifierId = button.dataset.identifierId;
+                    if (!identifierId) {
+                        return;
+                    }
+
+                    button.disabled = true;
+                    showFeedback('', 'info');
+
+                    try {
+                        const action = button.dataset.action === 'return' ? 'return' : 'checkout';
+                        const response = await fetch(action === 'return' ? '{{ url_for("return_checkout_item") }}' : '{{ url_for("checkout_request_item") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ identifier_id: identifierId })
+                        });
+
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            if (result.identifier && Object.keys(result.identifier).length) {
+                                updateIdentifierRow(button, result.identifier);
+                            } else {
+                                button.disabled = false;
+                            }
+                            showFeedback(result.error || (action === 'return' ? 'Failed to return checkout.' : 'Failed to request checkout.'), 'danger');
+                            return;
+                        }
+
+                        updateIdentifierRow(button, result.identifier || {});
+                        showFeedback(action === 'return' ? 'Checkout returned.' : 'Checkout request submitted.', 'success');
+                    } catch (error) {
+                        button.disabled = false;
+                        showFeedback(button.dataset.action === 'return' ? 'Failed to return checkout.' : 'Failed to request checkout.', 'danger');
+                    }
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

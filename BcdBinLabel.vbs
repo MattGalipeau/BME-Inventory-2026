@@ -13,14 +13,26 @@
 
 	' Data Folder
 	sDataFolder =  UCase(Left(Wscript.ScriptFullName, Len(Wscript.ScriptFullName) - Len(Wscript.ScriptName) - 1))
+    sLabelFolder = sDataFolder & "\Labels"
 	
 	' Print
-	DoPrint(sDataFolder & "\" & sBinType & ".lbx")
+	If FileExists(sLabelFolder & "\" & sBinType & ".lbx") Then
+		DoPrint(sLabelFolder & "\" & sBinType & ".lbx")
+	Else
+		DoPrint(sDataFolder & "\" & sBinType & ".lbx")
+	End If
 
 
 	'*******************************************************************
 	'	Print Module
 	'*******************************************************************
+    Function FileExists(path)
+        Dim fso
+        Set fso = CreateObject("Scripting.FileSystemObject")
+        FileExists = fso.FileExists(path)
+        Set fso = Nothing
+    End Function
+
     Function GetNamedObject(doc, names)
         Dim i, obj
         Set GetNamedObject = Nothing

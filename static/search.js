@@ -25,11 +25,13 @@ function buildPrimaryCard(result) {
             data-item-name="${result.Name || ''}"
             data-item-upc="${result.UPC || ''}"
             data-item-qty="${result.TotalQty || ''}"
-            data-item-room="${result.WallNames || result.Rooms || 'Unknown'}"
+            data-item-room="${result.Rooms || 'Unknown'}"
             data-item-last-changed="${result.LastAdded || result.LastChanged || 'Unknown'}"
             data-item-image="${result.Thumbnail || ''}"
             data-item-location-details="${result.LocationDetails || ''}"
             data-item-locations="${result.LocationCount || ''}"
+            data-item-coordinate="${result.PrimaryCoordinate || ''}"
+            data-item-all-coordinates="${result.BinCoordinates || ''}"
         >
             <img class="recent-item-image" src="${result.Thumbnail || ''}" alt="${result.Name || 'Item'} thumbnail">
             <div class="recent-item-body">
@@ -75,6 +77,7 @@ function showPrimaryCards(title, subtitle, results) {
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search_query');
     const itemImage = document.getElementById('itemImage');
+    const itemLocationSummary = document.getElementById('itemLocationSummary');
     const primaryCardGrid = document.getElementById('primary-card-grid');
     const primaryCardTitle = document.getElementById('primary-card-title');
     const primaryCardSubtitle = document.getElementById('primary-card-subtitle');
@@ -92,28 +95,104 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const modal = document.getElementById('itemModal');
   const closeButton = document.querySelector('.close-button');
+  const floorplanMarkers = document.getElementById('itemFloorplanMarkers');
+  const BIN_COORD_COLUMN_COUNT = 48;
+  const BIN_COORD_ROW_COUNT = 36;
+
+  const parseBinCoordinate = (value) => {
+      const match = String(value || '').trim().toUpperCase().match(/^([A-Z]{1,2})([1-9]|[1-2][0-9]|3[0-6])$/);
+      if (!match) {
+          return null;
+      }
+
+      const columnLabel = match[1];
+      let columnIndex = 0;
+      for (let index = 0; index < columnLabel.length; index += 1) {
+          columnIndex = (columnIndex * 26) + (columnLabel.charCodeAt(index) - 64);
+      }
+      columnIndex -= 1;
+
+      return {
+          label: `${columnLabel}${match[2]}`,
+          columnIndex,
+          rowIndex: Number(match[2]) - 1
+      };
+  };
+
+  const updateFloorplanMarkers = (coordinates) => {
+      if (!floorplanMarkers) {
+          return;
+      }
+
+      floorplanMarkers.innerHTML = '';
+      const seen = new Set();
+      String(coordinates || '')
+          .split(',')
+          .map((coordinate) => coordinate.trim())
+          .filter(Boolean)
+          .forEach((coordinate) => {
+              const parsed = parseBinCoordinate(coordinate);
+              if (!parsed || seen.has(parsed.label)) {
+                  return;
+              }
+              seen.add(parsed.label);
+
+              const marker = document.createElement('div');
+              marker.className = 'item-floorplan-marker';
+              marker.textContent = 'X';
+              marker.title = `Bin coordinate ${parsed.label}`;
+              marker.style.left = `${((parsed.columnIndex + 0.5) / BIN_COORD_COLUMN_COUNT) * 100}%`;
+              marker.style.top = `${((parsed.rowIndex + 0.5) / BIN_COORD_ROW_COUNT) * 100}%`;
+              floorplanMarkers.appendChild(marker);
+          });
+  };
 
   const openCardModal = (card) => {
       if (!card) return;
-      const locationDetails = card.dataset.itemLocationDetails;
-      const details = (locationDetails ? [
+      const roomLocations = (card.dataset.itemRoom || 'Unknown')
+          .split(',')
+          .map((room) => room.trim())
+          .filter(Boolean)
+          .join(', ') || 'Unknown';
+      const allCoordinates = card.dataset.itemAllCoordinates || '';
+      const locationDetails = String(card.dataset.itemLocationDetails || '')
+          .split(',')
+          .map((location) => location.trim())
+          .filter(Boolean);
+      const primaryLocation = locationDetails[0] || '';
+      const primaryBinMatch = primaryLocation.match(/([A-Za-z]+)\s+(\d+)\s*$/);
+      const primaryBinLabel = primaryBinMatch ? `${primaryBinMatch[1]} ${primaryBinMatch[2]}` : 'Unknown';
+      const locationSummary = locationDetails.length > 0
+          ? locationDetails.map((location) => {
+              const roomMatch = location.match(/^(110A|110B|110C|110)\b/i);
+              const binMatch = location.match(/([A-Za-z]+)\s+(\d+)\s*$/);
+              const parts = [];
+              if (roomMatch) {
+                  parts.push(roomMatch[1].toUpperCase());
+              }
+              if (binMatch) {
+                  parts.push(`${binMatch[1]} ${binMatch[2]}`);
+              }
+              return parts.length > 0 ? parts.join(' - ') : location;
+          }).join(' | ')
+          : [roomLocations !== 'Unknown' ? roomLocations : '', primaryBinLabel !== 'Unknown' ? primaryBinLabel : '']
+              .filter(Boolean)
+              .join(' - ') || 'Unknown';
+      const details = [
           `UPC: ${card.dataset.itemUpc || ''}`,
           `Total Quantity: ${card.dataset.itemQty || ''}`,
-          `# of Locations: ${card.dataset.itemLocations || ''}`,
-          `Locations: ${locationDetails}`,
           `Last Changed: ${card.dataset.itemLastChanged || 'Unknown'}`
-      ] : [
-          `UPC: ${card.dataset.itemUpc || ''}`,
-          `Total Quantity: ${card.dataset.itemQty || ''}`,
-          `Room: ${card.dataset.itemRoom || 'Unknown'}`,
-          `Last Changed: ${card.dataset.itemLastChanged || 'Unknown'}`
-      ]).join('\n');
+      ].join('\n');
 
       document.getElementById('itemTitle').innerText = card.dataset.itemName;
       document.getElementById('itemDetails').innerText = details;
+      if (itemLocationSummary) {
+          itemLocationSummary.innerText = locationSummary;
+      }
       itemImage.src = card.dataset.itemImage || '';
       itemImage.alt = `${card.dataset.itemName} image`;
       itemImage.style.display = itemImage.src ? 'block' : 'none';
+      updateFloorplanMarkers(allCoordinates);
       modal.style.display = 'block';
 
       const itemName = card.dataset.itemName || '';
@@ -154,12 +233,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Close modal on clicking close button
   closeButton.addEventListener('click', () => {
+      updateFloorplanMarkers('');
       modal.style.display = 'none';
   });
 
   // Close modal when clicking outside the modal content
   modal.addEventListener('click', (event) => {
       if (event.target === modal) {
+          updateFloorplanMarkers('');
           modal.style.display = 'none';
       }
   });
