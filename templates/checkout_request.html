@@ -42,7 +42,7 @@
             <div class="checkout-header">
                 <div>
                     <h1>Checkout Request</h1>
-                    <p>Students can request checkout only for items that have individual identifiers.</p>
+                    <p>If you would like to check something out, please do so here. The Technician will reach out to you for items you do not have immediate access to.</p>
                 </div>
             </div>
 
@@ -116,9 +116,28 @@
         </section>
     </main>
 
+    <div class="auth-modal-overlay" id="auth-modal" aria-hidden="true">
+        <div class="auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+            <h2 id="auth-modal-title">Database Access</h2>
+            <p>Enter the editor password to open the database page.</p>
+            <label class="auth-modal-label" for="auth-password">Password</label>
+            <input class="auth-modal-input" id="auth-password" type="password" autocomplete="current-password">
+            <div class="auth-modal-error" id="auth-error"></div>
+            <div class="auth-modal-actions">
+                <button type="button" class="auth-modal-cancel" id="auth-cancel">Cancel</button>
+                <button type="button" class="auth-modal-submit" id="auth-submit">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (() => {
             const feedbackBox = document.getElementById('checkout-feedback');
+            const authModal = document.getElementById('auth-modal');
+            const authPasswordInput = document.getElementById('auth-password');
+            const authError = document.getElementById('auth-error');
+            const authCancel = document.getElementById('auth-cancel');
+            const authSubmit = document.getElementById('auth-submit');
 
             function showFeedback(message, level) {
                 if (!feedbackBox) {
@@ -126,6 +145,78 @@
                 }
                 feedbackBox.textContent = message || '';
                 feedbackBox.className = `alert alert-${level} ${message ? '' : 'd-none'}`;
+            }
+
+            function closeAuthModal() {
+                authModal.classList.remove('visible');
+                authModal.setAttribute('aria-hidden', 'true');
+                authPasswordInput.value = '';
+                authError.textContent = '';
+            }
+
+            function openAuthModal() {
+                authModal.classList.add('visible');
+                authModal.setAttribute('aria-hidden', 'false');
+                authPasswordInput.value = '';
+                authError.textContent = '';
+                window.setTimeout(() => authPasswordInput.focus(), 0);
+            }
+
+            async function requestProtectedLinkAuth(link) {
+                openAuthModal();
+
+                return await new Promise((resolve) => {
+                    const cleanup = () => {
+                        authSubmit.removeEventListener('click', submitHandler);
+                        authCancel.removeEventListener('click', cancelHandler);
+                        authModal.removeEventListener('click', overlayHandler);
+                        authPasswordInput.removeEventListener('keydown', keyHandler);
+                    };
+
+                    const cancelHandler = () => {
+                        cleanup();
+                        closeAuthModal();
+                        resolve(null);
+                    };
+
+                    const overlayHandler = (event) => {
+                        if (event.target === authModal) {
+                            cancelHandler();
+                        }
+                    };
+
+                    const submitHandler = async () => {
+                        authError.textContent = '';
+                        const response = await fetch(link.dataset.authUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: authPasswordInput.value })
+                        });
+                        if (!response.ok) {
+                            authError.textContent = 'Incorrect password.';
+                            authPasswordInput.select();
+                            return;
+                        }
+                        const result = await response.json();
+                        cleanup();
+                        closeAuthModal();
+                        resolve(result);
+                    };
+
+                    const keyHandler = (event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            submitHandler();
+                        } else if (event.key === 'Escape') {
+                            cancelHandler();
+                        }
+                    };
+
+                    authSubmit.addEventListener('click', submitHandler);
+                    authCancel.addEventListener('click', cancelHandler);
+                    authModal.addEventListener('click', overlayHandler);
+                    authPasswordInput.addEventListener('keydown', keyHandler);
+                });
             }
 
             function updateIdentifierRow(button, identifier = {}) {
@@ -198,6 +289,21 @@
                     } catch (error) {
                         button.disabled = false;
                         showFeedback(button.dataset.action === 'return' ? 'Failed to return checkout.' : 'Failed to request checkout.', 'danger');
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-protected-link]').forEach((link) => {
+                link.addEventListener('click', async (event) => {
+                    const alreadyAuthenticated = link.dataset.authenticated === 'true';
+                    if (alreadyAuthenticated) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    const result = await requestProtectedLinkAuth(link);
+                    if (result && result.redirect) {
+                        window.location.href = result.redirect;
                     }
                 });
             });

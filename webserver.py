@@ -160,11 +160,16 @@ def ensure_item_identifier_table():
                 IdentifierID INTEGER PRIMARY KEY AUTOINCREMENT,
                 UPC INTEGER NOT NULL,
                 UnitIdentifier TEXT NOT NULL UNIQUE,
+                CanCheckOut INTEGER NOT NULL DEFAULT 0,
                 CreatedDate TEXT NOT NULL,
                 CreatedTime TEXT NOT NULL,
                 FOREIGN KEY (UPC) REFERENCES items(UPC)
             )
         """)
+        cursor.execute("PRAGMA table_info(item_identifiers)")
+        existing_columns = {row["name"] for row in cursor.fetchall()}
+        if "CanCheckOut" not in existing_columns:
+            cursor.execute("ALTER TABLE item_identifiers ADD COLUMN CanCheckOut INTEGER NOT NULL DEFAULT 0")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_item_identifiers_upc ON item_identifiers (UPC)")
         db.commit()
     except sqlite3.Error as e:
@@ -407,9 +412,17 @@ def load_item_identifiers(upc):
     identifiers = []
     try:
         cursor.execute("""
-            SELECT IdentifierID, UPC, UnitIdentifier, CreatedDate, CreatedTime
-            FROM item_identifiers
-            WHERE UPC = ?
+            SELECT
+                ii.IdentifierID,
+                ii.UPC,
+                ii.UnitIdentifier,
+                ii.CanCheckOut,
+                ii.CreatedDate,
+                ii.CreatedTime,
+                CASE WHEN c.IdentifierID IS NOT NULL THEN 1 ELSE 0 END AS IsCheckedOut
+            FROM item_identifiers ii
+            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            WHERE ii.UPC = ?
             ORDER BY UnitIdentifier
         """, (upc,))
         identifiers = [dict(row) for row in cursor.fetchall()]
@@ -482,8 +495,8 @@ def create_item_identifiers(upc):
                 next_suffix += 1
             unit_identifier = f"{identifier_prefix}{next_suffix:03d}"
             cursor.execute("""
-                INSERT INTO item_identifiers (UPC, UnitIdentifier, CreatedDate, CreatedTime)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO item_identifiers (UPC, UnitIdentifier, CanCheckOut, CreatedDate, CreatedTime)
+                VALUES (?, ?, 0, ?, ?)
             """, (upc, unit_identifier, created_date, created_time))
             created.append(unit_identifier)
             used_suffixes.add(next_suffix)
@@ -561,6 +574,7 @@ def load_checkout_request_items(current_email=""):
                 i.TotalQty,
                 ii.IdentifierID,
                 ii.UnitIdentifier,
+                ii.CanCheckOut,
                 ii.CreatedDate,
                 ii.CreatedTime,
                 c.Email AS CheckedOutBy,
@@ -569,6 +583,7 @@ def load_checkout_request_items(current_email=""):
             FROM items i
             INNER JOIN item_identifiers ii ON ii.UPC = i.UPC
             LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            WHERE ii.CanCheckOut = 1
             ORDER BY i.Name COLLATE NOCASE, ii.UnitIdentifier
         """)
         for row in cursor.fetchall():
@@ -583,6 +598,7 @@ def load_checkout_request_items(current_email=""):
             item["Identifiers"].append({
                 "IdentifierID": record.get("IdentifierID"),
                 "UnitIdentifier": record.get("UnitIdentifier") or "",
+                "CanCheckOut": bool(record.get("CanCheckOut")),
                 "CreatedDate": record.get("CreatedDate") or "",
                 "CreatedTime": record.get("CreatedTime") or "",
                 "CheckedOutBy": record.get("CheckedOutBy") or "",
@@ -684,6 +700,7 @@ def create_checkout_request(identifier_id, email, session_id):
                 "CheckedOutBy": record["CheckedOutBy"],
                 "RequestedDate": record.get("RequestedDate") or "",
                 "RequestedTime": record.get("RequestedTime") or "",
+                "IsCheckedOutByCurrentUser": (record.get("CheckedOutBy") or "").strip().lower() == email,
             }, "This identifier has already been requested."
 
         now = datetime.now()
@@ -718,6 +735,7 @@ def create_checkout_request(identifier_id, email, session_id):
             "CheckedOutBy": email,
             "RequestedDate": requested_date,
             "RequestedTime": requested_time,
+            "IsCheckedOutByCurrentUser": True,
         }, None
     except sqlite3.IntegrityError:
         db.rollback()
@@ -4236,6 +4254,60 @@ def delete_item_identifier_route():
         "success": True,
         "item": summary,
         "identifiers": load_item_identifiers(deleted_upc),
+    }), 200
+
+@app.route('/update-item-identifier-checkout', methods=['POST'])
+def update_item_identifier_checkout_route():
+    data = request.get_json(silent=True) or {}
+    identifier_id = data.get('identifier_id')
+    can_check_out = data.get('can_check_out')
+
+    if identifier_id in (None, ''):
+        return jsonify({"error": "Missing identifier ID"}), 400
+
+    try:
+        identifier_id = int(identifier_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Identifier ID must be numeric"}), 400
+
+    normalized_checkout_flag = 1 if bool(can_check_out) else 0
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            SELECT
+                ii.UPC,
+                CASE WHEN c.IdentifierID IS NOT NULL THEN 1 ELSE 0 END AS IsCheckedOut
+            FROM item_identifiers ii
+            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            WHERE ii.IdentifierID = ?
+        """, (identifier_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Identifier not found"}), 404
+
+        if not normalized_checkout_flag and int(row["IsCheckedOut"] or 0):
+            return jsonify({"error": "Return this identifier before disabling checkout."}), 409
+
+        cursor.execute(
+            "UPDATE item_identifiers SET CanCheckOut = ? WHERE IdentifierID = ?",
+            (normalized_checkout_flag, identifier_id)
+        )
+        db.commit()
+        updated_upc = row["UPC"]
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while updating identifier checkout flag:", e.args[0])
+        return jsonify({"error": "Failed to update checkout setting"}), 500
+    finally:
+        db.close()
+
+    summary = load_item_identifier_summary(updated_upc)
+    return jsonify({
+        "success": True,
+        "item": summary,
+        "identifiers": load_item_identifiers(updated_upc),
     }), 200
 
 @app.route('/print-bin-label', methods=['POST'])

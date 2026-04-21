@@ -408,13 +408,14 @@
                                     <th scope="col">Identifier</th>
                                     <th scope="col">Created Date</th>
                                     <th scope="col">Created Time</th>
+                                    <th scope="col">Can Check Out</th>
                                     <th scope="col">Print</th>
                                     <th scope="col">Delete</th>
                                 </tr>
                             </thead>
                             <tbody id="item-identifiers-table-body">
                                 <tr>
-                                    <td colspan="5" class="empty-state">No identifiers created yet.</td>
+                                    <td colspan="6" class="empty-state">No identifiers created yet.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1062,7 +1063,7 @@
                 itemIdentifiersMeta.textContent = `UPC ${item.UPC || 0} · ${item.IdentifierCount || 0} / ${item.TotalQty || 0} IDs created`;
 
                 if (!identifiers.length) {
-                    itemIdentifiersTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No identifiers created yet.</td></tr>';
+                    itemIdentifiersTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No identifiers created yet.</td></tr>';
                     return;
                 }
 
@@ -1071,6 +1072,14 @@
                         <td>${identifier.UnitIdentifier || ''}</td>
                         <td>${identifier.CreatedDate || 'Unknown'}</td>
                         <td>${identifier.CreatedTime || 'Unknown'}</td>
+                        <td>
+                            <input
+                                type="checkbox"
+                                class="form-check-input item-identifier-checkout-toggle"
+                                data-identifier-id="${identifier.IdentifierID || ''}"
+                                ${identifier.CanCheckOut ? 'checked' : ''}
+                            >
+                        </td>
                         <td>
                             <button
                                 type="button"
@@ -1094,6 +1103,9 @@
 
                 itemIdentifiersTableBody.querySelectorAll('.print-item-identifier-button').forEach((button) => {
                     bindPrintItemIdentifierButton(button);
+                });
+                itemIdentifiersTableBody.querySelectorAll('.item-identifier-checkout-toggle').forEach((checkbox) => {
+                    bindItemIdentifierCheckoutToggle(checkbox);
                 });
                 itemIdentifiersTableBody.querySelectorAll('.delete-item-identifier-button').forEach((button) => {
                     bindDeleteItemIdentifierButton(button);
@@ -1130,7 +1142,7 @@
                     itemIdentifiersUpcInput.value = upc;
                     itemIdentifiersName.textContent = button.dataset.itemName || 'Item Name';
                     itemIdentifiersMeta.textContent = `UPC ${upc} · ${button.dataset.identifierCount || 0} / ${button.dataset.itemTotalQty || 0} IDs created`;
-                    itemIdentifiersTableBody.innerHTML = '<tr><td colspan="3" class="empty-state">Loading identifiers...</td></tr>';
+                    itemIdentifiersTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading identifiers...</td></tr>';
                     itemIdentifiersModal.show();
 
                     try {
@@ -1138,7 +1150,7 @@
                     } catch (error) {
                         itemIdentifiersErrorBox.textContent = error.message;
                         itemIdentifiersErrorBox.classList.remove('d-none');
-                        itemIdentifiersTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">Could not load identifiers.</td></tr>';
+                        itemIdentifiersTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">Could not load identifiers.</td></tr>';
                     }
                 });
             }
@@ -1187,6 +1199,43 @@
                     const result = await response.json().catch(() => ({}));
                     if (!response.ok) {
                         itemIdentifiersErrorBox.textContent = result.error || 'Failed to delete item identifier.';
+                        itemIdentifiersErrorBox.classList.remove('d-none');
+                        return;
+                    }
+
+                    renderItemIdentifiers(result.item || {}, result.identifiers || []);
+                    if (result.item?.UPC) {
+                        updateIdentifierButtonsForUpc(result.item.UPC, result.item.IdentifierCount || 0, result.item.TotalQty || 0);
+                    }
+                });
+            }
+
+            function bindItemIdentifierCheckoutToggle(checkbox) {
+                checkbox.addEventListener('change', async () => {
+                    const identifierId = checkbox.dataset.identifierId;
+                    if (!identifierId) {
+                        return;
+                    }
+
+                    const desiredState = checkbox.checked;
+                    checkbox.disabled = true;
+                    itemIdentifiersErrorBox.classList.add('d-none');
+                    itemIdentifiersErrorBox.textContent = '';
+
+                    const response = await fetch('{{ url_for("update_item_identifier_checkout_route") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            identifier_id: identifierId,
+                            can_check_out: desiredState
+                        })
+                    });
+
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        checkbox.checked = !desiredState;
+                        checkbox.disabled = false;
+                        itemIdentifiersErrorBox.textContent = result.error || 'Failed to update checkout setting.';
                         itemIdentifiersErrorBox.classList.remove('d-none');
                         return;
                     }
@@ -1891,7 +1940,7 @@
                 itemIdentifiersErrorBox.textContent = '';
                 itemIdentifiersName.textContent = 'Item Name';
                 itemIdentifiersMeta.textContent = 'UPC 0 · 0 / 0 IDs created';
-                itemIdentifiersTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No identifiers created yet.</td></tr>';
+                itemIdentifiersTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No identifiers created yet.</td></tr>';
             });
         })();
     </script>
