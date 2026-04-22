@@ -162,6 +162,7 @@ This file tracks the major code and product changes made to the BME Inventory ap
 - Updated generated item identifiers to use a 6-character label-friendly format: first 3 letters of the item name plus a 3-digit sequence starting at `000`.
 - Added a `Checkout Request` page that lists only uniquely identified items, allows per-identifier checkout requests, and records requested identifiers in user tracking under `Checked Out`.
 - Added a per-identifier `Can Check Out` checkbox in the IDs modal so uniquely labeled items can be individually allowed or blocked from appearing on the checkout page.
+- Added a dedicated `Checkouts` view on the database page with item name, unique ID, URI ID, email, and checkout/check-in date/time history, and changed returns to preserve checkout log records instead of deleting them.
 - Audited the SQLite query paths and tightened the remaining dynamic-ID handling so UPC and entry/bin identifiers are coerced to integers before reaching query construction.
 
 ## Notes

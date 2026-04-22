@@ -128,6 +128,7 @@ def ensure_tracking_tables():
                 RequestID INTEGER PRIMARY KEY AUTOINCREMENT,
                 SessionID INTEGER,
                 Email TEXT NOT NULL,
+                UriId TEXT NOT NULL DEFAULT '',
                 IdentifierID INTEGER NOT NULL UNIQUE,
                 UPC INTEGER NOT NULL,
                 UnitIdentifier TEXT NOT NULL,
@@ -140,8 +141,35 @@ def ensure_tracking_tables():
                 FOREIGN KEY (UPC) REFERENCES items(UPC)
             )
         """)
+        cursor.execute("PRAGMA table_info(checkout_requests)")
+        existing_columns = {row["name"] for row in cursor.fetchall()}
+        if "UriId" not in existing_columns:
+            cursor.execute("ALTER TABLE checkout_requests ADD COLUMN UriId TEXT NOT NULL DEFAULT ''")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_requests_session ON checkout_requests (SessionID)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_requests_email ON checkout_requests (Email)")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS checkout_log(
+                LogID INTEGER PRIMARY KEY AUTOINCREMENT,
+                SessionID INTEGER,
+                Email TEXT NOT NULL,
+                UriId TEXT NOT NULL DEFAULT '',
+                IdentifierID INTEGER NOT NULL,
+                UPC INTEGER NOT NULL,
+                UnitIdentifier TEXT NOT NULL,
+                ItemName TEXT NOT NULL,
+                CheckOutDate TEXT NOT NULL,
+                CheckOutTime TEXT NOT NULL,
+                CheckInDate TEXT,
+                CheckInTime TEXT,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (SessionID) REFERENCES user_sessions(SessionID),
+                FOREIGN KEY (IdentifierID) REFERENCES item_identifiers(IdentifierID),
+                FOREIGN KEY (UPC) REFERENCES items(UPC)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_log_session ON checkout_log (SessionID)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_log_email ON checkout_log (Email)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_log_identifier_active ON checkout_log (IdentifierID, IsActive)")
         db.commit()
     except sqlite3.Error as e:
         db.rollback()
@@ -421,9 +449,9 @@ def load_item_identifiers(upc):
                 ii.CreatedTime,
                 CASE WHEN c.IdentifierID IS NOT NULL THEN 1 ELSE 0 END AS IsCheckedOut
             FROM item_identifiers ii
-            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            LEFT JOIN checkout_log c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
             WHERE ii.UPC = ?
-            ORDER BY UnitIdentifier
+            ORDER BY ii.UnitIdentifier
         """, (upc,))
         identifiers = [dict(row) for row in cursor.fetchall()]
     except sqlite3.Error as e:
@@ -541,7 +569,7 @@ def load_user_tracking(limit=100):
                 ) AS CheckedOut
             FROM user_sessions s
             LEFT JOIN user_item_access a ON a.SessionID = s.SessionID
-            LEFT JOIN checkout_requests c ON c.SessionID = s.SessionID AND c.IsActive = 1
+            LEFT JOIN checkout_log c ON c.SessionID = s.SessionID AND c.IsActive = 1
             GROUP BY
                 s.SessionID,
                 s.Email,
@@ -561,6 +589,35 @@ def load_user_tracking(limit=100):
 
     return sessions
 
+def load_checkout_history(limit=250):
+    db = get_db()
+    cursor = db.cursor()
+    history = []
+    try:
+        cursor.execute("""
+            SELECT
+                ItemName,
+                UnitIdentifier,
+                UriId,
+                Email,
+                CheckOutDate,
+                CheckOutTime,
+                CheckInDate,
+                CheckInTime
+            FROM checkout_log
+            ORDER BY
+                datetime(CheckOutDate || ' ' || CheckOutTime) DESC,
+                LogID DESC
+            LIMIT ?
+        """, (limit,))
+        history = [dict(row) for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print("An error occurred while loading checkout history:", e.args[0])
+    finally:
+        db.close()
+
+    return history
+
 def load_checkout_request_items(current_email=""):
     current_email = (current_email or "").strip().lower()
     db = get_db()
@@ -578,11 +635,11 @@ def load_checkout_request_items(current_email=""):
                 ii.CreatedDate,
                 ii.CreatedTime,
                 c.Email AS CheckedOutBy,
-                c.RequestedDate,
-                c.RequestedTime
+                c.CheckOutDate AS RequestedDate,
+                c.CheckOutTime AS RequestedTime
             FROM items i
             INNER JOIN item_identifiers ii ON ii.UPC = i.UPC
-            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            LEFT JOIN checkout_log c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
             WHERE ii.CanCheckOut = 1
             ORDER BY i.Name COLLATE NOCASE, ii.UnitIdentifier
         """)
@@ -623,8 +680,8 @@ def return_checkout_request(identifier_id, email):
     cursor = db.cursor()
     try:
         cursor.execute("""
-            SELECT IdentifierID, UnitIdentifier, Email
-            FROM checkout_requests
+            SELECT LogID, IdentifierID, UnitIdentifier, Email
+            FROM checkout_log
             WHERE IdentifierID = ? AND IsActive = 1
         """, (identifier_id,))
         row = cursor.fetchone()
@@ -649,7 +706,17 @@ def return_checkout_request(identifier_id, email):
                 "IsCheckedOutByCurrentUser": False,
             }, "Only the user who checked out this identifier can return it."
 
-        cursor.execute("DELETE FROM checkout_requests WHERE IdentifierID = ? AND IsActive = 1", (identifier_id,))
+        now = datetime.now()
+        check_in_date = now.strftime("%Y-%m-%d")
+        check_in_time = now.strftime("%H:%M:%S")
+        cursor.execute(
+            """
+            UPDATE checkout_log
+            SET IsActive = 0, CheckInDate = ?, CheckInTime = ?
+            WHERE LogID = ?
+            """,
+            (check_in_date, check_in_time, record["LogID"])
+        )
         db.commit()
         return {
             "IdentifierID": record["IdentifierID"],
@@ -666,10 +733,13 @@ def return_checkout_request(identifier_id, email):
     finally:
         db.close()
 
-def create_checkout_request(identifier_id, email, session_id):
+def create_checkout_request(identifier_id, email, session_id, uri_id):
     email = (email or "").strip().lower()
     if not email:
         return None, "You must be signed in to request a checkout."
+    normalized_uri_id = re.sub(r"\D", "", str(uri_id or ""))
+    if not re.fullmatch(r"\d{9}", normalized_uri_id):
+        return None, "Enter a valid 9-digit URI ID number."
 
     db = get_db()
     cursor = db.cursor()
@@ -681,11 +751,12 @@ def create_checkout_request(identifier_id, email, session_id):
                 ii.UnitIdentifier,
                 i.Name,
                 c.Email AS CheckedOutBy,
-                c.RequestedDate,
-                c.RequestedTime
+                c.UriId,
+                c.CheckOutDate,
+                c.CheckOutTime
             FROM item_identifiers ii
             INNER JOIN items i ON i.UPC = ii.UPC
-            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            LEFT JOIN checkout_log c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
             WHERE ii.IdentifierID = ?
         """, (identifier_id,))
         row = cursor.fetchone()
@@ -698,8 +769,9 @@ def create_checkout_request(identifier_id, email, session_id):
                 "IdentifierID": record["IdentifierID"],
                 "UnitIdentifier": record["UnitIdentifier"],
                 "CheckedOutBy": record["CheckedOutBy"],
-                "RequestedDate": record.get("RequestedDate") or "",
-                "RequestedTime": record.get("RequestedTime") or "",
+                "UriId": record.get("UriId") or "",
+                "RequestedDate": record.get("CheckOutDate") or "",
+                "RequestedTime": record.get("CheckOutTime") or "",
                 "IsCheckedOutByCurrentUser": (record.get("CheckedOutBy") or "").strip().lower() == email,
             }, "This identifier has already been requested."
 
@@ -707,20 +779,22 @@ def create_checkout_request(identifier_id, email, session_id):
         requested_date = now.strftime("%Y-%m-%d")
         requested_time = now.strftime("%H:%M:%S")
         cursor.execute("""
-            INSERT INTO checkout_requests (
+                INSERT INTO checkout_log (
                 SessionID,
                 Email,
+                UriId,
                 IdentifierID,
                 UPC,
                 UnitIdentifier,
                 ItemName,
-                RequestedDate,
-                RequestedTime,
+                CheckOutDate,
+                CheckOutTime,
                 IsActive
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (
             session_id,
             email,
+            normalized_uri_id,
             record["IdentifierID"],
             record["UPC"],
             record["UnitIdentifier"],
@@ -733,6 +807,7 @@ def create_checkout_request(identifier_id, email, session_id):
             "IdentifierID": record["IdentifierID"],
             "UnitIdentifier": record["UnitIdentifier"],
             "CheckedOutBy": email,
+            "UriId": normalized_uri_id,
             "RequestedDate": requested_date,
             "RequestedTime": requested_time,
             "IsCheckedOutByCurrentUser": True,
@@ -1261,6 +1336,12 @@ def load_recently_changed_items(limit=5):
                         WHEN r.RoomName IS NOT NULL THEN r.RoomName
                     END
                 ) AS Rooms,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN r.RoomName IS NOT NULL AND w.WallName IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL THEN
+                            r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
+                    END
+                ) AS LocationDetails,
                 GROUP_CONCAT(
                     DISTINCT CASE
                         WHEN b.Coordinates IS NOT NULL AND TRIM(b.Coordinates) != '' THEN b.Coordinates
@@ -3770,7 +3851,8 @@ def db():
     entries = load_database_entries()
     bin_rows = load_bins_directory()
     user_tracking = load_user_tracking()
-    return render_template('db.html', entries=entries, bins=bin_rows, user_tracking=user_tracking)
+    checkout_history = load_checkout_history()
+    return render_template('db.html', entries=entries, bins=bin_rows, user_tracking=user_tracking, checkout_history=checkout_history)
 
 @app.route('/database-auth', methods=['POST'])
 def database_auth():
@@ -4119,6 +4201,7 @@ def print_item_identifier_label():
 def checkout_request_item():
     data = request.get_json(silent=True) or {}
     identifier_id = data.get('identifier_id')
+    uri_id = data.get('uri_id', '')
 
     if not identifier_id:
         return jsonify({"error": "Missing identifier ID"}), 400
@@ -4138,7 +4221,7 @@ def checkout_request_item():
         if tracked_session_id:
             session["tracked_session_id"] = tracked_session_id
 
-    result, error = create_checkout_request(identifier_id, email, tracked_session_id)
+    result, error = create_checkout_request(identifier_id, email, tracked_session_id, uri_id)
     if error:
         status_code = 409 if result else 400
         return jsonify({

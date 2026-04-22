@@ -130,6 +130,20 @@
         </div>
     </div>
 
+    <div class="auth-modal-overlay" id="uri-id-modal" aria-hidden="true">
+        <div class="auth-modal-card" role="dialog" aria-modal="true" aria-labelledby="uri-id-modal-title">
+            <h2 id="uri-id-modal-title">URI ID Required</h2>
+            <p>Enter your 9-digit URI ID number to complete this checkout request.</p>
+            <label class="auth-modal-label" for="uri-id-input">URI ID#</label>
+            <input class="auth-modal-input" id="uri-id-input" type="text" inputmode="numeric" autocomplete="off" maxlength="9" placeholder="123456789">
+            <div class="auth-modal-error" id="uri-id-error"></div>
+            <div class="auth-modal-actions">
+                <button type="button" class="auth-modal-cancel" id="uri-id-cancel">Cancel</button>
+                <button type="button" class="auth-modal-submit" id="uri-id-submit">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (() => {
             const feedbackBox = document.getElementById('checkout-feedback');
@@ -138,6 +152,11 @@
             const authError = document.getElementById('auth-error');
             const authCancel = document.getElementById('auth-cancel');
             const authSubmit = document.getElementById('auth-submit');
+            const uriIdModal = document.getElementById('uri-id-modal');
+            const uriIdInput = document.getElementById('uri-id-input');
+            const uriIdError = document.getElementById('uri-id-error');
+            const uriIdCancel = document.getElementById('uri-id-cancel');
+            const uriIdSubmit = document.getElementById('uri-id-submit');
 
             function showFeedback(message, level) {
                 if (!feedbackBox) {
@@ -219,6 +238,80 @@
                 });
             }
 
+            function closeUriIdModal() {
+                uriIdModal.classList.remove('visible');
+                uriIdModal.setAttribute('aria-hidden', 'true');
+                uriIdInput.value = '';
+                uriIdError.textContent = '';
+            }
+
+            function openUriIdModal() {
+                uriIdModal.classList.add('visible');
+                uriIdModal.setAttribute('aria-hidden', 'false');
+                uriIdInput.value = '';
+                uriIdError.textContent = '';
+                window.setTimeout(() => uriIdInput.focus(), 0);
+            }
+
+            async function requestUriId() {
+                openUriIdModal();
+
+                return await new Promise((resolve) => {
+                    const cleanup = () => {
+                        uriIdSubmit.removeEventListener('click', submitHandler);
+                        uriIdCancel.removeEventListener('click', cancelHandler);
+                        uriIdModal.removeEventListener('click', overlayHandler);
+                        uriIdInput.removeEventListener('input', inputHandler);
+                        uriIdInput.removeEventListener('keydown', keyHandler);
+                    };
+
+                    const cancelHandler = () => {
+                        cleanup();
+                        closeUriIdModal();
+                        resolve(null);
+                    };
+
+                    const overlayHandler = (event) => {
+                        if (event.target === uriIdModal) {
+                            cancelHandler();
+                        }
+                    };
+
+                    const inputHandler = () => {
+                        uriIdInput.value = uriIdInput.value.replace(/\D/g, '').slice(0, 9);
+                    };
+
+                    const submitHandler = () => {
+                        uriIdError.textContent = '';
+                        const normalized = uriIdInput.value.replace(/\D/g, '');
+                        if (!/^\d{9}$/.test(normalized)) {
+                            uriIdError.textContent = 'Enter a valid 9-digit URI ID number.';
+                            uriIdInput.focus();
+                            uriIdInput.select();
+                            return;
+                        }
+                        cleanup();
+                        closeUriIdModal();
+                        resolve(normalized);
+                    };
+
+                    const keyHandler = (event) => {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            submitHandler();
+                        } else if (event.key === 'Escape') {
+                            cancelHandler();
+                        }
+                    };
+
+                    uriIdSubmit.addEventListener('click', submitHandler);
+                    uriIdCancel.addEventListener('click', cancelHandler);
+                    uriIdModal.addEventListener('click', overlayHandler);
+                    uriIdInput.addEventListener('input', inputHandler);
+                    uriIdInput.addEventListener('keydown', keyHandler);
+                });
+            }
+
             function updateIdentifierRow(button, identifier = {}) {
                 const row = button.closest('[data-identifier-row]');
                 if (!row) {
@@ -267,10 +360,18 @@
 
                     try {
                         const action = button.dataset.action === 'return' ? 'return' : 'checkout';
+                        let uriId = '';
+                        if (action === 'checkout') {
+                            uriId = await requestUriId();
+                            if (!uriId) {
+                                button.disabled = false;
+                                return;
+                            }
+                        }
                         const response = await fetch(action === 'return' ? '{{ url_for("return_checkout_item") }}' : '{{ url_for("checkout_request_item") }}', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ identifier_id: identifierId })
+                            body: JSON.stringify({ identifier_id: identifierId, uri_id: uriId })
                         });
 
                         const result = await response.json().catch(() => ({}));

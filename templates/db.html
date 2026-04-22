@@ -67,6 +67,15 @@
                     >
                         View User Tracking
                     </button>
+                    <button
+                        type="button"
+                        class="btn bin-directory-button mt-3 ms-2"
+                        id="toggle-checkout-history"
+                        aria-expanded="false"
+                        aria-controls="checkout-history-panel"
+                    >
+                        Checkouts
+                    </button>
                     <div class="inventory-search-wrap">
                         <label class="inventory-search-label" for="inventory-search-input">Search Items</label>
                         <input
@@ -195,7 +204,6 @@
                                 <th scope="col">Sign-In Time</th>
                                 <th scope="col">Sign-Out Time</th>
                                 <th scope="col">Items Accessed</th>
-                                <th scope="col">Checked Out</th>
                                 <th scope="col">Access Count</th>
                             </tr>
                         </thead>
@@ -208,13 +216,57 @@
                                     <td>{{ record.SignInTime if record.SignInTime else 'Unknown' }}</td>
                                     <td>{{ record.SignOutTime if record.SignOutTime else 'Active session' }}</td>
                                     <td>{{ record.AccessedItems if record.AccessedItems else 'None yet' }}</td>
-                                    <td>{{ record.CheckedOut if record.CheckedOut else 'None' }}</td>
                                     <td>{{ record.AccessCount if record.AccessCount is not none else 0 }}</td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="7" class="empty-state">No tracked user activity yet.</td>
+                                    <td colspan="6" class="empty-state">No tracked user activity yet.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="bin-directory-panel d-none" id="checkout-history-panel">
+                <div class="bin-directory-header">
+                    <div>
+                        <h2>Checkout Log</h2>
+                        <p>Full history of item checkouts and returns.</p>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle inventory-table" id="checkout-history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item Name</th>
+                                <th scope="col">Unique ID</th>
+                                <th scope="col">URI ID</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Check-Out Date</th>
+                                <th scope="col">Check-Out Time</th>
+                                <th scope="col">Check-In Date</th>
+                                <th scope="col">Check-In Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="checkout-history-table-body">
+                            {% if checkout_history %}
+                                {% for record in checkout_history %}
+                                <tr>
+                                    <td>{{ record.ItemName if record.ItemName else 'Unknown' }}</td>
+                                    <td>{{ record.UnitIdentifier if record.UnitIdentifier else 'Unknown' }}</td>
+                                    <td>{{ record.UriId if record.UriId else 'Unknown' }}</td>
+                                    <td>{{ record.Email if record.Email else 'Unknown' }}</td>
+                                    <td>{{ record.CheckOutDate if record.CheckOutDate else 'Unknown' }}</td>
+                                    <td>{{ record.CheckOutTime if record.CheckOutTime else 'Unknown' }}</td>
+                                    <td>{{ record.CheckInDate if record.CheckInDate else 'Active checkout' }}</td>
+                                    <td>{{ record.CheckInTime if record.CheckInTime else 'Active checkout' }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="empty-state">No checkout history yet.</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -716,6 +768,8 @@
             const binDirectoryPanel = document.getElementById('bin-directory-panel');
             const toggleUserTrackingButton = document.getElementById('toggle-user-tracking');
             const userTrackingPanel = document.getElementById('user-tracking-panel');
+            const toggleCheckoutHistoryButton = document.getElementById('toggle-checkout-history');
+            const checkoutHistoryPanel = document.getElementById('checkout-history-panel');
             const inventoryTablePanel = document.getElementById('inventory-table-panel');
             const binsTableBody = document.getElementById('bins-table-body');
             const sortButtons = document.querySelectorAll('.sort-button');
@@ -1565,6 +1619,7 @@
             function setDatabaseView(view) {
                 const showingBins = view === 'bins';
                 const showingTracking = view === 'tracking';
+                const showingCheckouts = view === 'checkouts';
                 const showingItems = view === 'items';
 
                 if (binDirectoryPanel) {
@@ -1572,6 +1627,9 @@
                 }
                 if (userTrackingPanel) {
                     userTrackingPanel.classList.toggle('d-none', !showingTracking);
+                }
+                if (checkoutHistoryPanel) {
+                    checkoutHistoryPanel.classList.toggle('d-none', !showingCheckouts);
                 }
                 if (inventoryTablePanel) {
                     inventoryTablePanel.classList.toggle('d-none', !showingItems);
@@ -1583,6 +1641,10 @@
                 if (toggleUserTrackingButton) {
                     toggleUserTrackingButton.setAttribute('aria-expanded', String(showingTracking));
                     toggleUserTrackingButton.textContent = showingTracking ? 'Back To Items' : 'View User Tracking';
+                }
+                if (toggleCheckoutHistoryButton) {
+                    toggleCheckoutHistoryButton.setAttribute('aria-expanded', String(showingCheckouts));
+                    toggleCheckoutHistoryButton.textContent = showingCheckouts ? 'Back To Items' : 'Checkouts';
                 }
             }
 
@@ -1597,6 +1659,13 @@
                 toggleUserTrackingButton.addEventListener('click', () => {
                     const isOpening = userTrackingPanel.classList.contains('d-none');
                     setDatabaseView(isOpening ? 'tracking' : 'items');
+                });
+            }
+
+            if (toggleCheckoutHistoryButton && checkoutHistoryPanel) {
+                toggleCheckoutHistoryButton.addEventListener('click', () => {
+                    const isOpening = checkoutHistoryPanel.classList.contains('d-none');
+                    setDatabaseView(isOpening ? 'checkouts' : 'items');
                 });
             }
 
