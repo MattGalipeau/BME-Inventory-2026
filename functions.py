@@ -9,6 +9,15 @@ DATABASE = 'bmeInventory.db'
 cnt = sqlite3.connect(DATABASE, check_same_thread=False) 
 cursor = cnt.cursor()
 
+def refreshDatabaseConnection():
+    global cnt, cursor
+    try:
+        cnt.close()
+    except Exception:
+        pass
+    cnt = sqlite3.connect(DATABASE, check_same_thread=False)
+    cursor = cnt.cursor()
+
 def normalizeItemName(itemName):
     return " ".join((itemName or "").split()).strip().lower()
 
@@ -27,6 +36,15 @@ def findExistingItem(itemName):
             }
 
     return None
+
+def roomIDDecider(Room):
+    room_lookup = {
+        "110": 1,
+        "110A": 2,
+        "110B": 3,
+        "110C": 4,
+    }
+    return room_lookup.get((Room or "").strip())
 
 # This function will print out the barcode. Pass in szItemCode, which is a string of 8 numbers.
 # Can also be used for reprint. Will have to grab "UPC" from the specified row in the database, and pass as szItemCode to this function.
@@ -50,7 +68,9 @@ def createItemLocator(itemName, binNumber, Qty, binType, Wall, Room):
     if not itemName:
         return
 
-    WallID = wallDecider(Wall, Room)
+    roomID = roomIDDecider(Room)
+    room_only_location = binType == "None" and not str(binNumber or "").strip()
+    WallID = wallDecider(Wall, Room) if Wall and Room else None
     print(itemName, binNumber, Qty, binType, Wall, Room)
     clearing = cursor.fetchall()
 
@@ -67,17 +87,25 @@ def createItemLocator(itemName, binNumber, Qty, binType, Wall, Room):
     dateTime = now.strftime("%Y-%m-%d %H:%M:%S")
     date, time = dateTime.split(" ")
 
-    binUPC = binUPCFinder(binType, binNumber, WallID)
+    if room_only_location:
+        executive = [(UPC, itemName, None, roomID, Qty, date, time)]
+        cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, RoomID, Qty, Date, Time) VALUES(?,?,?,?,?,?,?)", executive)
+        TotalQtyChange(UPC, Qty)
+        cnt.commit()
+        return
+
+    lookup_room_id = roomID if binType == "None" else None
+    binUPC = binUPCFinder(binType, binNumber, WallID, lookup_room_id)
     print(binUPC)
     if binUPC is not None:
-        executive = [(UPC, itemName, binUPC, Qty, date, time)]
-        cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, Qty, Date, Time) VALUES(?,?,?,?,?,?)", executive)
+        executive = [(UPC, itemName, binUPC, roomID, Qty, date, time)]
+        cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, RoomID, Qty, Date, Time) VALUES(?,?,?,?,?,?,?)", executive)
         TotalQtyChange(UPC, Qty)
         cnt.commit()
     else:
         binID, binUPC = createBin(binType, Wall, Room)
-        executive = [(UPC, itemName, binUPC, Qty, date, time)]
-        cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, Qty, Date, Time) VALUES(?,?,?,?,?,?)", executive)
+        executive = [(UPC, itemName, binUPC, roomID, Qty, date, time)]
+        cnt.executemany("INSERT INTO item_bin(UPC, Name, BinUPC, RoomID, Qty, Date, Time) VALUES(?,?,?,?,?,?,?)", executive)
         TotalQtyChange(UPC, Qty)
         cnt.commit()
 
@@ -87,13 +115,15 @@ def createBin(binType, Wall, Room, coordinates=None):
     #    binID = (cursor.fetchone())[0]+1
     #except:
     #    binID = 1
-    WallID = wallDecider(Wall, Room)
+    roomID = roomIDDecider(Room)
+    WallID = wallDecider(Wall, Room) if Wall and Room else None
     binUPC, binID = binUPCDecider(binType)
-    executive = [(binID, binUPC, binType, WallID, coordinates)]
+    executive = [(binID, binUPC, binType, WallID, roomID, coordinates)]
     try:
-        cnt.executemany("INSERT INTO bins (BinID, BinUPC, BinType, WallID, Coordinates) VALUES(?,?,?,?,?)", executive)
-        VbsFile = "BcdBinLabel.vbs" 
-        Print(binUPC, VbsFile, binType, binID)
+        cnt.executemany("INSERT INTO bins (BinID, BinUPC, BinType, WallID, RoomID, Coordinates) VALUES(?,?,?,?,?,?)", executive)
+        if binType != "None":
+            VbsFile = "BcdBinLabel.vbs" 
+            Print(binUPC, VbsFile, binType, binID)
     except sqlite3.Error as exc:
         cnt.rollback()
         print("Failed to create bin:", exc)
@@ -177,9 +207,14 @@ def deleteItemEntry(EntryID): #entry ID is the primary key for item_bin. Would i
     cnt.execute("DELETE FROM item_bin WHERE EntryID = ?", (EntryID,))
     cnt.commit()
 
-def binUPCFinder(binType, binID, wallID=None):
+def binUPCFinder(binType, binID, wallID=None, roomID=None):
     binID = int(binID)
-    if wallID is None:
+    if wallID is None and roomID is not None:
+        cursor.execute(
+            "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ? AND RoomID = ?",
+            (binType, binID, int(roomID))
+        )
+    elif wallID is None:
         cursor.execute(
             "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ?",
             (binType, binID)
@@ -221,6 +256,8 @@ def binUPCDecider(binType):
         binUPC = binUPC + 6000000
     if binType == "Other":
         binUPC = binUPC + 7000000
+    if binType == "None":
+        binUPC = binUPC + 8000000
     return binUPC, binID
 
 def editQtyEntry(qtyUpdate, EntryID):
@@ -255,8 +292,11 @@ def editItemLocation(newBinLocation, EntryID, binType, Wall, Room):
         cnt.execute("UPDATE item_bin set BinID = ? WHERE EntryID = ?", (newBinLocation, EntryID))
     cnt.commit()
 
-def returnBinList(WallID, binType):
-    cursor.execute("SELECT BinID FROM bins WHERE WallID = ? AND BinType = ?", (WallID, binType))
+def returnBinList(WallID, binType, roomID=None):
+    if WallID is None and roomID is not None:
+        cursor.execute("SELECT BinID FROM bins WHERE RoomID = ? AND BinType = ?", (int(roomID), binType))
+    else:
+        cursor.execute("SELECT BinID FROM bins WHERE WallID = ? AND BinType = ?", (WallID, binType))
     rows = cursor.fetchall()
     theList =[{"id": row[0]} for row in rows]
     return theList

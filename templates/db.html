@@ -159,6 +159,9 @@
                                         </button>
                                     </td>
                                     <td>
+                                        {% if bin.BinType == 'None' %}
+                                        <span class="text-muted small">No label</span>
+                                        {% else %}
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-success print-bin-button"
@@ -166,6 +169,7 @@
                                         >
                                             Reprint Label
                                         </button>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <button
@@ -205,6 +209,7 @@
                                 <th scope="col">Sign-Out Time</th>
                                 <th scope="col">Items Accessed</th>
                                 <th scope="col">Access Count</th>
+                                <th scope="col">Action</th>
                             </tr>
                         </thead>
                         <tbody id="user-tracking-table-body">
@@ -217,11 +222,25 @@
                                     <td>{{ record.SignOutTime if record.SignOutTime else 'Active session' }}</td>
                                     <td>{{ record.AccessedItems if record.AccessedItems else 'None yet' }}</td>
                                     <td>{{ record.AccessCount if record.AccessCount is not none else 0 }}</td>
+                                    <td>
+                                        {% if record.IsActive %}
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-warning end-user-session-button"
+                                            data-session-id="{{ record.SessionID }}"
+                                            data-is-current-session="{{ 'true' if current_tracked_session_id == record.SessionID else 'false' }}"
+                                        >
+                                            End Session
+                                        </button>
+                                        {% else %}
+                                        <span class="text-muted small">Ended</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="6" class="empty-state">No tracked user activity yet.</td>
+                                    <td colspan="7" class="empty-state">No tracked user activity yet.</td>
                                 </tr>
                             {% endif %}
                         </tbody>
@@ -313,9 +332,9 @@
                                 <td>{{ entry.UPC }}</td>
                                 <td>{{ entry.Qty }}</td>
                                 <td>{{ entry.RoomName if entry.RoomName else 'Unknown' }}</td>
-                                <td>{{ entry.WallName if entry.WallName else 'Unknown' }}</td>
+                                <td>{{ entry.WallName if entry.WallName else ('—' if entry.BinType == 'None' else 'Unknown') }}</td>
                                 <td>{{ entry.BinType if entry.BinType else 'Unknown' }}</td>
-                                <td>{{ entry.BinID if entry.BinID else 'Unknown' }}</td>
+                                <td>{{ entry.BinID if entry.BinID is not none else ('—' if entry.BinType == 'None' else 'Unknown') }}</td>
                                 <td>{{ entry.Date if entry.Date else 'Unknown' }}</td>
                                 <td>{{ entry.Time if entry.Time else 'Unknown' }}</td>
                                 <td>
@@ -416,6 +435,7 @@
                                     <option value="Tabletop">Tabletop</option>
                                     <option value="Overhead">Overhead</option>
                                     <option value="Other">Other</option>
+                                    <option value="None">None</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -523,6 +543,7 @@
                                     <option value="Tabletop">Tabletop</option>
                                     <option value="Overhead">Overhead</option>
                                     <option value="Other">Other</option>
+                                    <option value="None">None</option>
                                 </select>
                             </div>
                             <div class="col">
@@ -578,6 +599,64 @@
         </div>
     </div>
 
+    <div class="touch-keyboard-overlay" id="touch-keyboard-overlay" aria-hidden="true">
+        <div class="touch-keyboard-card" id="touch-keyboard">
+            <div class="touch-keyboard-header">
+                <h2>Item Name</h2>
+                <button type="button" class="touch-keyboard-close" id="touch-keyboard-close" aria-label="Close keyboard">&times;</button>
+            </div>
+            <div class="touch-keyboard-display" id="touch-keyboard-display"></div>
+            <div class="touch-keyboard-keys" id="touch-keyboard-keys">
+                <button type="button" class="touch-keyboard-key" data-key="Q">Q</button>
+                <button type="button" class="touch-keyboard-key" data-key="W">W</button>
+                <button type="button" class="touch-keyboard-key" data-key="E">E</button>
+                <button type="button" class="touch-keyboard-key" data-key="R">R</button>
+                <button type="button" class="touch-keyboard-key" data-key="T">T</button>
+                <button type="button" class="touch-keyboard-key" data-key="Y">Y</button>
+                <button type="button" class="touch-keyboard-key" data-key="U">U</button>
+                <button type="button" class="touch-keyboard-key" data-key="I">I</button>
+                <button type="button" class="touch-keyboard-key" data-key="O">O</button>
+                <button type="button" class="touch-keyboard-key" data-key="P">P</button>
+
+                <button type="button" class="touch-keyboard-key" data-key="A">A</button>
+                <button type="button" class="touch-keyboard-key" data-key="S">S</button>
+                <button type="button" class="touch-keyboard-key" data-key="D">D</button>
+                <button type="button" class="touch-keyboard-key" data-key="F">F</button>
+                <button type="button" class="touch-keyboard-key" data-key="G">G</button>
+                <button type="button" class="touch-keyboard-key" data-key="H">H</button>
+                <button type="button" class="touch-keyboard-key" data-key="J">J</button>
+                <button type="button" class="touch-keyboard-key" data-key="K">K</button>
+                <button type="button" class="touch-keyboard-key" data-key="L">L</button>
+
+                <button type="button" class="touch-keyboard-key" data-key="Z">Z</button>
+                <button type="button" class="touch-keyboard-key" data-key="X">X</button>
+                <button type="button" class="touch-keyboard-key" data-key="C">C</button>
+                <button type="button" class="touch-keyboard-key" data-key="V">V</button>
+                <button type="button" class="touch-keyboard-key" data-key="B">B</button>
+                <button type="button" class="touch-keyboard-key" data-key="N">N</button>
+                <button type="button" class="touch-keyboard-key" data-key="M">M</button>
+                <button type="button" class="touch-keyboard-key touch-keyboard-key-action" data-key="case">aA</button>
+                <button type="button" class="touch-keyboard-key touch-keyboard-key-wide" data-key="-">-</button>
+                <button type="button" class="touch-keyboard-key touch-keyboard-key-wide" data-key="backspace">⌫</button>
+
+                <button type="button" class="touch-keyboard-key" data-key="1">1</button>
+                <button type="button" class="touch-keyboard-key" data-key="2">2</button>
+                <button type="button" class="touch-keyboard-key" data-key="3">3</button>
+                <button type="button" class="touch-keyboard-key" data-key="4">4</button>
+                <button type="button" class="touch-keyboard-key" data-key="5">5</button>
+                <button type="button" class="touch-keyboard-key" data-key="6">6</button>
+                <button type="button" class="touch-keyboard-key" data-key="7">7</button>
+                <button type="button" class="touch-keyboard-key" data-key="8">8</button>
+                <button type="button" class="touch-keyboard-key" data-key="9">9</button>
+                <button type="button" class="touch-keyboard-key" data-key="0">0</button>
+
+                <button type="button" class="touch-keyboard-key touch-keyboard-key-action" data-key="clear">Clear</button>
+                <button type="button" class="touch-keyboard-key touch-keyboard-key-space" data-key="space">Space</button>
+                <button type="button" class="touch-keyboard-key touch-keyboard-key-action" data-key="done">Done</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="createBinModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content bg-dark text-light border-secondary">
@@ -619,6 +698,7 @@
                                 <option value="Tabletop">Tabletop</option>
                                 <option value="Overhead">Overhead</option>
                                 <option value="Other">Other</option>
+                                <option value="None">None</option>
                             </select>
                         </div>
                         <div class="mb-0">
@@ -788,6 +868,11 @@
             const generateItemIdentifiersButton = document.getElementById('generate-item-identifiers-button');
             const BIN_COORD_COLUMN_COUNT = 48;
             const BIN_COORD_ROW_COUNT = 36;
+            const ROOM_ONLY_STORAGE_TYPE = 'None';
+
+            function isRoomOnlyStorageType(value) {
+                return value === ROOM_ONLY_STORAGE_TYPE;
+            }
 
             function columnIndexToLabel(index) {
                 let label = '';
@@ -988,6 +1073,17 @@
             createBinQuantityInput?.addEventListener('input', syncCreateBinCoordinateAvailability);
             createBinQuantityInput?.addEventListener('change', syncCreateBinCoordinateAvailability);
             syncCreateBinCoordinateAvailability();
+
+            function syncCreateBinWallRequirement() {
+                const roomLevelNoneBin = createBinStorageTypeInput?.value === ROOM_ONLY_STORAGE_TYPE;
+                if (createBinWallInput) {
+                    createBinWallInput.required = !roomLevelNoneBin;
+                    createBinWallInput.disabled = false;
+                }
+            }
+
+            createBinStorageTypeInput?.addEventListener('change', syncCreateBinWallRequirement);
+            syncCreateBinWallRequirement();
             inventorySearchInput?.addEventListener('input', applyInventorySearchFilter);
             applyInventorySearchFilter();
 
@@ -1075,9 +1171,9 @@
                         <td>${entry.UPC ?? ''}</td>
                         <td>${entry.Qty ?? ''}</td>
                         <td>${entry.RoomName || 'Unknown'}</td>
-                        <td>${entry.WallName || 'Unknown'}</td>
+                        <td>${entry.WallName || (entry.BinType === ROOM_ONLY_STORAGE_TYPE ? '-' : 'Unknown')}</td>
                         <td>${entry.BinType || 'Unknown'}</td>
-                        <td>${entry.BinID ?? 'Unknown'}</td>
+                        <td>${entry.BinID ?? (entry.BinType === ROOM_ONLY_STORAGE_TYPE ? '-' : 'Unknown')}</td>
                         <td>${entry.Date || 'Unknown'}</td>
                         <td>${entry.Time || 'Unknown'}</td>
                         <td>
@@ -1483,13 +1579,15 @@
                             </button>
                         </td>
                         <td>
-                            <button
+                            ${bin.BinType === ROOM_ONLY_STORAGE_TYPE
+                                ? '<span class="text-muted small">No label</span>'
+                                : `<button
                                 type="button"
                                 class="btn btn-sm btn-outline-success print-bin-button"
                                 data-bin-upc="${bin.BinUPC ?? ''}"
                             >
                                 Reprint Label
-                            </button>
+                            </button>`}
                         </td>
                         <td>
                             <button
@@ -1571,7 +1669,19 @@
             }
 
             async function loadBinOptions(selectedBin = '') {
-                if (!roomInput.value || !wallInput.value || !storageTypeInput.value) {
+                const roomOnlyStorage = isRoomOnlyStorageType(storageTypeInput.value);
+
+                wallInput.disabled = false;
+                wallInput.required = !roomOnlyStorage;
+                binNumberInput.required = !roomOnlyStorage;
+
+                if (!roomInput.value || !storageTypeInput.value) {
+                    binNumberInput.disabled = true;
+                    binNumberInput.innerHTML = '<option value="">--Select Bin--</option>';
+                    return;
+                }
+
+                if (!wallInput.value && !roomOnlyStorage) {
                     binNumberInput.disabled = true;
                     binNumberInput.innerHTML = '<option value="">--Select Bin--</option>';
                     return;
@@ -1589,6 +1699,15 @@
                 });
                 const bins = response.ok ? await response.json() : [];
                 binNumberInput.innerHTML = '<option value="">--Select Bin--</option>';
+                if (roomOnlyStorage) {
+                    const roomOnlyOption = document.createElement('option');
+                    roomOnlyOption.value = '';
+                    roomOnlyOption.textContent = 'Room Only';
+                    if (!selectedBin) {
+                        roomOnlyOption.selected = true;
+                    }
+                    binNumberInput.appendChild(roomOnlyOption);
+                }
                 bins.forEach((bin) => {
                     const option = document.createElement('option');
                     option.value = String(bin.id);
@@ -1612,8 +1731,72 @@
                 });
             });
 
+            if ({{ 'true' if prompt_database_auth else 'false' }}) {
+                const databaseLink = document.querySelector('[data-protected-link]');
+                if (databaseLink && databaseLink.dataset.authenticated !== 'true') {
+                    window.setTimeout(async () => {
+                        const result = await requestProtectedLinkAuth(databaseLink);
+                        if (result?.redirect) {
+                            window.location.href = result.redirect;
+                            return;
+                        }
+                        try {
+                            await fetch('{{ url_for("sign_out") }}', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            });
+                        } catch (error) {
+                        }
+                        window.location.href = '{{ url_for("sign_in_page") }}';
+                    }, 0);
+                }
+            }
+
             document.querySelectorAll('[data-image-status]').forEach((indicator) => {
                 bindImageStatusIndicator(indicator);
+            });
+
+            document.querySelectorAll('.end-user-session-button').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const sessionId = button.dataset.sessionId;
+                    if (!sessionId) {
+                        return;
+                    }
+
+                    const confirmed = window.confirm('End this active session?');
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    const response = await fetch('{{ url_for("end_user_session") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_id: sessionId })
+                    });
+
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        window.alert(result.error || 'Failed to end session.');
+                        return;
+                    }
+
+                    if (result.ended_current_session && result.redirect) {
+                        window.location.href = result.redirect;
+                        return;
+                    }
+
+                    const row = button.closest('tr');
+                    if (row) {
+                        const signOutCell = row.children[3];
+                        const actionCell = row.children[6];
+                        if (signOutCell) {
+                            signOutCell.textContent = 'Ended';
+                        }
+                        if (actionCell) {
+                            actionCell.innerHTML = '<span class="text-muted small">Ended</span>';
+                        }
+                    }
+                });
             });
 
             function setDatabaseView(view) {
@@ -1780,9 +1963,9 @@
                         row.children[1].textContent = nameInput.value;
                         row.children[4].textContent = qtyInput.value;
                         row.children[5].textContent = roomInput.value;
-                        row.children[6].textContent = wallInput.value;
+                        row.children[6].textContent = wallInput.value || (storageTypeInput.value === ROOM_ONLY_STORAGE_TYPE ? '—' : 'Unknown');
                         row.children[7].textContent = storageTypeInput.value;
-                        row.children[8].textContent = binNumberInput.value;
+                        row.children[8].textContent = binNumberInput.value || (storageTypeInput.value === ROOM_ONLY_STORAGE_TYPE ? '—' : 'Unknown');
 
                         const now = new Date();
                         const dateText = now.getFullYear() + '-' +
@@ -2010,6 +2193,161 @@
                 itemIdentifiersName.textContent = 'Item Name';
                 itemIdentifiersMeta.textContent = 'UPC 0 · 0 / 0 IDs created';
                 itemIdentifiersTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No identifiers created yet.</td></tr>';
+            });
+        })();
+    </script>
+    <script>
+        (() => {
+            const useCustomKeyboard = false;
+            const isTinyPiView = () => useCustomKeyboard && window.matchMedia('(max-width: 430px) and (pointer: coarse)').matches;
+            const overlay = document.getElementById('touch-keyboard-overlay');
+            const keyboard = document.getElementById('touch-keyboard');
+            const display = document.getElementById('touch-keyboard-display');
+            const title = document.querySelector('.touch-keyboard-header h2');
+            const closeButton = document.getElementById('touch-keyboard-close');
+            const itemNameInput = document.getElementById('item_name');
+            const authPasswordInput = document.getElementById('auth-password');
+            const newEntryModal = document.getElementById('newEntryModal');
+            const authModal = document.getElementById('auth-modal');
+            const alphaKeys = Array.from(keyboard.querySelectorAll('[data-key]'))
+                .filter((button) => /^[A-Z]$/.test(button.dataset.key || ''));
+            const numberKeyMap = {
+                '1': '!',
+                '2': '@',
+                '3': '#',
+                '4': '$',
+                '5': '%',
+                '6': '^',
+                '7': '&',
+                '8': '*',
+                '9': '(',
+                '0': ')',
+            };
+            const numberKeys = Array.from(keyboard.querySelectorAll('[data-key]'))
+                .filter((button) => /^[0-9]$/.test(button.dataset.key || ''));
+            let activeInput = null;
+            let isUppercase = true;
+
+            if (!overlay || !keyboard || !display || !closeButton || !itemNameInput || !authPasswordInput || !newEntryModal || !authModal) {
+                return;
+            }
+
+            function syncDisplay() {
+                if (!activeInput) {
+                    display.textContent = '';
+                    return;
+                }
+                const isPasswordField = activeInput === authPasswordInput;
+                display.textContent = isPasswordField ? '•'.repeat((activeInput.value || '').length) : (activeInput.value || '');
+            }
+
+            function updateInputValue(nextValue) {
+                if (!activeInput) return;
+                activeInput.value = nextValue;
+                syncDisplay();
+                activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+
+            function syncKeyboardCase() {
+                alphaKeys.forEach((button) => {
+                    const baseLetter = (button.dataset.key || '').toLowerCase();
+                    button.textContent = isUppercase ? baseLetter.toUpperCase() : baseLetter;
+                });
+                numberKeys.forEach((button) => {
+                    const baseNumber = button.dataset.key || '';
+                    button.textContent = isUppercase ? (numberKeyMap[baseNumber] || baseNumber) : baseNumber;
+                });
+            }
+
+            function closeKeyboard() {
+                overlay.classList.remove('visible');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (activeInput) {
+                    activeInput.blur();
+                }
+            }
+
+            function openKeyboard(input) {
+                if (!isTinyPiView()) {
+                    return;
+                }
+                activeInput = input;
+                if (title) {
+                    title.textContent = input === authPasswordInput ? 'Database Password' : 'Item Name';
+                }
+                syncDisplay();
+                syncKeyboardCase();
+                overlay.classList.add('visible');
+                overlay.setAttribute('aria-hidden', 'false');
+            }
+
+            itemNameInput.addEventListener('focus', () => openKeyboard(itemNameInput));
+            itemNameInput.addEventListener('click', () => openKeyboard(itemNameInput));
+            authPasswordInput.addEventListener('focus', () => openKeyboard(authPasswordInput));
+            authPasswordInput.addEventListener('click', () => openKeyboard(authPasswordInput));
+
+            closeButton.addEventListener('click', closeKeyboard);
+
+            overlay.addEventListener('click', (event) => {
+                if (event.target === overlay) {
+                    closeKeyboard();
+                }
+            });
+
+            keyboard.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-key]');
+                if (!button || !activeInput) {
+                    return;
+                }
+
+                const key = button.dataset.key;
+                const currentValue = activeInput.value || '';
+
+                if (key === 'backspace') {
+                    updateInputValue(currentValue.slice(0, -1));
+                    return;
+                }
+
+                if (key === 'case') {
+                    isUppercase = !isUppercase;
+                    syncKeyboardCase();
+                    return;
+                }
+
+                if (key === 'clear') {
+                    updateInputValue('');
+                    return;
+                }
+
+                if (key === 'space') {
+                    updateInputValue(`${currentValue} `);
+                    return;
+                }
+
+                if (key === 'done') {
+                    closeKeyboard();
+                    return;
+                }
+
+                let characterToInsert = key;
+                if (/^[A-Z]$/.test(key)) {
+                    characterToInsert = isUppercase ? key : key.toLowerCase();
+                } else if (/^[0-9]$/.test(key)) {
+                    characterToInsert = isUppercase ? (numberKeyMap[key] || key) : key;
+                }
+                updateInputValue(`${currentValue}${characterToInsert}`);
+            });
+
+            newEntryModal.addEventListener('hidden.bs.modal', () => {
+                closeKeyboard();
+                activeInput = null;
+            });
+
+            authModal.addEventListener('click', (event) => {
+                if (event.target === authModal) {
+                    closeKeyboard();
+                    activeInput = null;
+                }
             });
         })();
     </script>

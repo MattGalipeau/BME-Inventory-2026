@@ -182,6 +182,19 @@
     "updated_at": "2026-04-14T16:47:24",
     "validation": {}
   },
+  "Anker 7-in-1 USB-C Hub": {
+    "image_url": "/static/item-images/anker-7-in-1-usb-c-hub-1e897ebd82.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-23T19:48:13",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows the Anker 7-in-1 USB-C Hub with no distractions, and it follows a clean product photo style typical of retail listings."
+    }
+  },
   "Bambu AMS": {
     "image_url": "/static/item-images/bambu-ams-700d0dad98.jpg",
     "note": "Resolved from source page image candidates.",
@@ -539,6 +552,19 @@
       "approved": true,
       "confidence": 0.95,
       "reason": "The image depicts a tabletop band saw that closely resembles the desired item. It features a clean and professional appearance suitable for a product listing."
+    }
+  },
+  "Tektronix TBS2074B Oscilloscope": {
+    "image_url": "/static/item-images/tektronix-tbs2074b-oscilloscope-5ad20916af.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-23T17:06:25",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
     }
   },
   "Voltera V-One": {

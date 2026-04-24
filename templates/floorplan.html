@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ItemGuessr</title>
+    <script>
+        if (window.matchMedia('(max-width: 430px) and (pointer: coarse)').matches) {
+            window.location.replace('/db');
+        }
+    </script>
     <style>
         :root {
             --primary-dark: #32714a;
@@ -540,6 +545,108 @@
                 transform: translate(var(--plan-pan-x-mobile, var(--plan-pan-x, 0%)), var(--plan-pan-y-mobile, var(--plan-pan-y, 0%))) scale(var(--plan-zoom-mobile, var(--plan-zoom, 1)));
             }
         }
+
+        @media (max-width: 520px), (max-height: 380px) {
+            .navbar {
+                padding: 0.3rem 0.45rem;
+                overflow-x: auto;
+            }
+            .container-fluid {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                min-width: max-content;
+                flex-wrap: nowrap;
+            }
+            .navbar-brand {
+                font-size: 1.1rem;
+                white-space: nowrap;
+            }
+            .navbar-nav {
+                height: auto;
+                gap: 0.35rem;
+                flex-wrap: nowrap;
+            }
+            .nav-item {
+                margin: 0 0.2rem;
+                font-size: 0.78rem;
+                white-space: nowrap;
+            }
+            .nav-user-email,
+            .sign-out-button {
+                font-size: 0.72rem;
+            }
+            .page {
+                padding: 6px;
+            }
+            .split-layout {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                min-height: 0;
+            }
+            .panel {
+                border-radius: 12px;
+            }
+            .plan-panel {
+                padding: 6px;
+            }
+            .plan-wrap {
+                padding: 0;
+            }
+            .game-panel {
+                min-height: 0;
+            }
+            .game-header h1 {
+                font-size: 1.15rem;
+            }
+            .game-header p,
+            .guess-help,
+            .guess-label,
+            .feedback-text,
+            .score-chip,
+            .game-empty {
+                font-size: 0.76rem;
+            }
+            .guess-item {
+                font-size: 0.98rem;
+            }
+            .score-row {
+                gap: 6px;
+            }
+            .score-chip {
+                padding: 0.3rem 0.5rem;
+            }
+            .feedback-box {
+                min-height: 110px;
+            }
+            .feedback-mark {
+                font-size: 3rem;
+            }
+            .room-button {
+                min-width: 44px;
+                min-height: 44px;
+            }
+            .room-label {
+                font-size: 0.72rem;
+            }
+            .compass {
+                width: 52px;
+                height: 52px;
+                right: 6px;
+                bottom: 6px;
+            }
+        }
+
+        @media (pointer: coarse) {
+            .nav-link,
+            .sign-out-button,
+            .room-button,
+            .auth-modal-actions button,
+            .auth-modal-input {
+                min-height: 44px;
+            }
+        }
+
     </style>
 </head>
 <body>

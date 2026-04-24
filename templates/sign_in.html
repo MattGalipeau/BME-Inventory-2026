@@ -198,6 +198,86 @@
                 filter: none;
             }
         }
+
+        @media (max-width: 430px) and (pointer: coarse) {
+            html,
+            body {
+                width: 100%;
+                min-height: 100%;
+            }
+
+            body {
+                padding: 0.35rem;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .sign-in-layout {
+                display: grid;
+                grid-template-columns: 1fr;
+                width: 90vw;
+                max-width: 90vw;
+                margin: 0 auto;
+                transform: none;
+                gap: 0.55rem;
+            }
+
+            .showcase-card {
+                display: block;
+                padding: 0.8rem;
+                border-radius: 14px;
+            }
+
+            .showcase-stage {
+                grid-template-columns: 1fr;
+                gap: 0.55rem;
+                min-height: 0;
+            }
+
+            .showcase-panel.side,
+            .showcase-panel.center {
+                height: 100px;
+                opacity: 1;
+                transform: none;
+                filter: none;
+            }
+
+            .showcase-panel figcaption {
+                padding: 0.5rem 0.6rem;
+            }
+
+            .showcase-name {
+                font-size: 0.78rem;
+            }
+
+            .sign-in-card {
+                width: 100%;
+                padding: 0.9rem;
+                border-radius: 14px;
+            }
+
+            h1 {
+                font-size: 1.15rem;
+            }
+
+            p,
+            label,
+            .error {
+                font-size: 0.76rem;
+            }
+
+            .sign-in-form {
+                margin-top: 0.8rem;
+                gap: 0.55rem;
+            }
+
+            input,
+            button {
+                min-height: 42px;
+                padding: 0.7rem 0.8rem;
+                font-size: 0.82rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -264,7 +344,7 @@
             }
 
             if (showcaseStage && showcaseItems.length) {
-                let centerIndex = 0;
+                let centerIndex = Math.floor(Math.random() * showcaseItems.length);
 
                 const wrappedItem = (offset) => {
                     const index = (centerIndex + offset + showcaseItems.length) % showcaseItems.length;
@@ -307,7 +387,8 @@
                     return;
                 }
 
-                window.location.href = result.redirect || '{{ url_for("home") }}';
+                const isIPhoneKioskView = window.matchMedia('(max-width: 430px) and (pointer: coarse)').matches;
+                window.location.href = isIPhoneKioskView ? '{{ url_for("db") }}' : (result.redirect || '{{ url_for("home") }}');
             });
         })();
     </script>

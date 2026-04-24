@@ -12,11 +12,13 @@ import mimetypes
 import base64
 import socket
 import ssl
+import smtplib
 import urllib.request
 import urllib.error
-from html import unescape
+from html import unescape, escape
 from urllib.parse import urlparse, quote_plus, urljoin, unquote
 from datetime import datetime
+from email.message import EmailMessage
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import functions
 
@@ -62,7 +64,16 @@ HELP_BOT_EMBED_MODEL = os.getenv("HELP_BOT_EMBED_MODEL", "mxbai-embed-large")
 IMAGE_AGENT_MODEL = os.getenv("IMAGE_AGENT_MODEL", "gpt-4o-mini")
 IMAGE_AGENT_PAGE_ATTEMPTS = int(os.getenv("IMAGE_AGENT_PAGE_ATTEMPTS", "4"))
 IMAGE_AGENT_MAX_VALIDATIONS = int(os.getenv("IMAGE_AGENT_MAX_VALIDATIONS", "2"))
+IMAGE_AGENT_AI_WEB_SEARCH = os.getenv("IMAGE_AGENT_AI_WEB_SEARCH", "false").lower() == "true"
 IMAGE_AGENT_AI_SEARCH_FALLBACK = os.getenv("IMAGE_AGENT_AI_SEARCH_FALLBACK", "false").lower() == "true"
+CHECKOUT_NOTIFY_EMAILS = [value.strip() for value in os.getenv("CHECKOUT_NOTIFY_EMAILS", "mgalipeau@uri.edu").split(",") if value.strip()]
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587") or "587")
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", SMTP_USERNAME).strip()
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
 ITEM_IMAGES_FILE = "item_images.json"
 ITEM_IMAGE_METADATA_FILE = "item_image_metadata.json"
 ITEM_IMAGE_CACHE_DIR = os.path.join("static", "item-images")
@@ -145,6 +156,10 @@ def ensure_tracking_tables():
         existing_columns = {row["name"] for row in cursor.fetchall()}
         if "UriId" not in existing_columns:
             cursor.execute("ALTER TABLE checkout_requests ADD COLUMN UriId TEXT NOT NULL DEFAULT ''")
+        if "FirstName" not in existing_columns:
+            cursor.execute("ALTER TABLE checkout_requests ADD COLUMN FirstName TEXT NOT NULL DEFAULT ''")
+        if "LastName" not in existing_columns:
+            cursor.execute("ALTER TABLE checkout_requests ADD COLUMN LastName TEXT NOT NULL DEFAULT ''")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_requests_session ON checkout_requests (SessionID)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_requests_email ON checkout_requests (Email)")
         cursor.execute("""
@@ -153,6 +168,8 @@ def ensure_tracking_tables():
                 SessionID INTEGER,
                 Email TEXT NOT NULL,
                 UriId TEXT NOT NULL DEFAULT '',
+                FirstName TEXT NOT NULL DEFAULT '',
+                LastName TEXT NOT NULL DEFAULT '',
                 IdentifierID INTEGER NOT NULL,
                 UPC INTEGER NOT NULL,
                 UnitIdentifier TEXT NOT NULL,
@@ -167,6 +184,12 @@ def ensure_tracking_tables():
                 FOREIGN KEY (UPC) REFERENCES items(UPC)
             )
         """)
+        cursor.execute("PRAGMA table_info(checkout_log)")
+        checkout_log_columns = {row["name"] for row in cursor.fetchall()}
+        if "FirstName" not in checkout_log_columns:
+            cursor.execute("ALTER TABLE checkout_log ADD COLUMN FirstName TEXT NOT NULL DEFAULT ''")
+        if "LastName" not in checkout_log_columns:
+            cursor.execute("ALTER TABLE checkout_log ADD COLUMN LastName TEXT NOT NULL DEFAULT ''")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_log_session ON checkout_log (SessionID)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_log_email ON checkout_log (Email)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkout_log_identifier_active ON checkout_log (IdentifierID, IsActive)")
@@ -224,6 +247,136 @@ def ensure_bin_coordinate_column():
         db.close()
 
 ensure_bin_coordinate_column()
+
+def ensure_bins_room_support():
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("PRAGMA table_info(bins)")
+        columns = cursor.fetchall()
+        if not columns:
+            return
+
+        column_map = {row["name"]: row for row in columns}
+        needs_room_column = "RoomID" not in column_map
+        wall_requires_value = bool(column_map.get("WallID") and column_map["WallID"]["notnull"])
+        needs_coordinates_column = "Coordinates" not in column_map
+
+        if not needs_room_column and not wall_requires_value and not needs_coordinates_column:
+            return
+
+        coordinate_expression = "Coordinates" if not needs_coordinates_column else "NULL"
+        room_id_expression = "COALESCE(b.RoomID, w.RoomID)" if not needs_room_column else "w.RoomID"
+
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("DROP TABLE IF EXISTS bins_new")
+        cursor.execute("""
+            CREATE TABLE bins_new(
+                BinUPC INTEGER PRIMARY KEY NOT NULL,
+                BinID INTEGER NOT NULL,
+                BinType TEXT NOT NULL,
+                WallID INTEGER,
+                RoomID INTEGER,
+                Coordinates TEXT,
+                FOREIGN KEY (WallID) REFERENCES walls(WallID),
+                FOREIGN KEY (RoomID) REFERENCES rooms(RoomID)
+            )
+        """)
+        cursor.execute(f"""
+            INSERT INTO bins_new (BinUPC, BinID, BinType, WallID, RoomID, Coordinates)
+            SELECT
+                b.BinUPC,
+                b.BinID,
+                b.BinType,
+                b.WallID,
+                {room_id_expression},
+                {coordinate_expression}
+            FROM bins b
+            LEFT JOIN walls w ON w.WallID = b.WallID
+        """)
+        cursor.execute("DROP TABLE bins")
+        cursor.execute("ALTER TABLE bins_new RENAME TO bins")
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while ensuring room-level bins:", e.args[0])
+    finally:
+        try:
+            cursor.execute("PRAGMA foreign_keys = ON")
+        except sqlite3.Error:
+            pass
+        db.close()
+
+ensure_bins_room_support()
+
+def ensure_item_bin_room_support():
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("PRAGMA table_info(item_bin)")
+        columns = cursor.fetchall()
+        if not columns:
+            return
+
+        column_map = {row["name"]: row for row in columns}
+        needs_room_column = "RoomID" not in column_map
+        bin_upc_requires_value = bool(column_map.get("BinUPC") and column_map["BinUPC"]["notnull"])
+
+        if not needs_room_column and not bin_upc_requires_value:
+            return
+
+        room_id_expression = "COALESCE(ib.RoomID, r.RoomID)" if not needs_room_column else "r.RoomID"
+
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("DROP TABLE IF EXISTS item_bin_new")
+        cursor.execute("""
+            CREATE TABLE item_bin_new(
+                EntryID INTEGER PRIMARY KEY AUTOINCREMENT,
+                UPC INTEGER NOT NULL,
+                Name TEXT NOT NULL,
+                BinUPC INTEGER,
+                RoomID INTEGER,
+                Qty INTEGER NOT NULL,
+                Date TEXT NOT NULL,
+                Time TEXT NOT NULL,
+                FOREIGN KEY (UPC) REFERENCES items(UPC),
+                FOREIGN KEY (BinUPC) REFERENCES bins(BinUPC),
+                FOREIGN KEY (RoomID) REFERENCES rooms(RoomID)
+            )
+        """)
+        cursor.execute(f"""
+            INSERT INTO item_bin_new (EntryID, UPC, Name, BinUPC, RoomID, Qty, Date, Time)
+            SELECT
+                ib.EntryID,
+                ib.UPC,
+                ib.Name,
+                ib.BinUPC,
+                {room_id_expression} AS RoomID,
+                ib.Qty,
+                ib.Date,
+                ib.Time
+            FROM item_bin ib
+            LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
+            LEFT JOIN walls w ON w.WallID = b.WallID
+            LEFT JOIN rooms r ON r.RoomID = w.RoomID
+        """)
+        cursor.execute("DROP TABLE item_bin")
+        cursor.execute("ALTER TABLE item_bin_new RENAME TO item_bin")
+        cursor.execute("CREATE INDEX IF NOT EXISTS nameIndex ON item_bin (Name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS UPCIndex ON item_bin (UPC)")
+        db.commit()
+    except sqlite3.Error as e:
+        db.rollback()
+        print("An error occurred while ensuring room-only item locations:", e.args[0])
+    finally:
+        try:
+            cursor.execute("PRAGMA foreign_keys = ON")
+        except sqlite3.Error:
+            pass
+        db.close()
+
+ensure_item_bin_room_support()
+functions.refreshDatabaseConnection()
 
 def build_bin_coord_columns(count):
     labels = []
@@ -335,15 +488,19 @@ def load_inventory_items(room_name=None):
                 i.TotalQty,
                 GROUP_CONCAT(
                     DISTINCT CASE
-                        WHEN r.RoomName IS NOT NULL THEN
+                        WHEN COALESCE(r.RoomName, rd.RoomName) IS NOT NULL THEN
                             CASE
-                                WHEN ? IS NOT NULL AND r.RoomName = ? THEN w.WallName
-                                ELSE r.RoomName
+                                WHEN ? IS NOT NULL AND COALESCE(r.RoomName, rd.RoomName) = ? AND w.WallName IS NOT NULL THEN w.WallName
+                                ELSE COALESCE(r.RoomName, rd.RoomName)
                             END
                     END
                 ) AS WallNames,
                 GROUP_CONCAT(
                     DISTINCT CASE
+                        WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN
+                            rd.RoomName
+                        WHEN COALESCE(r.RoomName, br.RoomName) IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL AND w.WallName IS NULL THEN
+                            COALESCE(r.RoomName, br.RoomName) || ' ' || b.BinType || ' ' || b.BinID
                         WHEN r.RoomName IS NOT NULL THEN
                             r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                     END
@@ -354,6 +511,8 @@ def load_inventory_items(room_name=None):
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms br ON br.RoomID = b.RoomID
+            LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
         """
         params = [room_name, room_name]
 
@@ -362,10 +521,12 @@ def load_inventory_items(room_name=None):
             WHERE EXISTS (
                 SELECT 1
                 FROM item_bin ib2
-                JOIN bins b2 ON b2.BinUPC = ib2.BinUPC
-                JOIN walls w2 ON w2.WallID = b2.WallID
-                JOIN rooms r2 ON r2.RoomID = w2.RoomID
-                WHERE ib2.UPC = i.UPC AND r2.RoomName = ?
+                LEFT JOIN bins b2 ON b2.BinUPC = ib2.BinUPC
+                LEFT JOIN walls w2 ON w2.WallID = b2.WallID
+                LEFT JOIN rooms r2 ON r2.RoomID = w2.RoomID
+                LEFT JOIN rooms rd2 ON rd2.RoomID = ib2.RoomID
+                LEFT JOIN rooms br2 ON br2.RoomID = b2.RoomID
+                WHERE ib2.UPC = i.UPC AND COALESCE(r2.RoomName, br2.RoomName, rd2.RoomName) = ?
             )
             """
             params.append(room_name)
@@ -403,16 +564,17 @@ def load_database_entries():
                 ib.Date,
                 ib.Time,
                 i.TotalQty,
-                b.BinID,
-                b.BinType,
-                w.WallName,
-                r.RoomName,
+                CASE WHEN ib.BinUPC IS NULL THEN NULL ELSE b.BinID END AS BinID,
+                COALESCE(b.BinType, CASE WHEN ib.BinUPC IS NULL THEN 'None' END) AS BinType,
+                CASE WHEN ib.BinUPC IS NULL THEN NULL ELSE w.WallName END AS WallName,
+                COALESCE(r.RoomName, rd.RoomName) AS RoomName,
                 COALESCE(id_counts.IdentifierCount, 0) AS IdentifierCount
             FROM item_bin ib
             LEFT JOIN items i ON i.UPC = ib.UPC
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
             LEFT JOIN (
                 SELECT UPC, COUNT(*) AS IdentifierCount
                 FROM item_identifiers
@@ -556,6 +718,10 @@ def load_user_tracking(limit=100):
                 s.SignInTime,
                 s.SignOutDate,
                 s.SignOutTime,
+                CASE
+                    WHEN s.SignOutDate IS NULL OR s.SignOutTime IS NULL THEN 1
+                    ELSE 0
+                END AS IsActive,
                 COUNT(DISTINCT a.AccessID) AS AccessCount,
                 GROUP_CONCAT(
                     DISTINCT CASE
@@ -582,6 +748,45 @@ def load_user_tracking(limit=100):
             LIMIT ?
         """, (limit,))
         sessions = [dict(row) for row in cursor.fetchall()]
+
+        for session_row in sessions:
+            if (session_row.get("AccessCount") or 0) > 0:
+                continue
+
+            sign_in_stamp = f"{session_row.get('SignInDate') or ''} {session_row.get('SignInTime') or ''}".strip()
+            sign_out_date = session_row.get("SignOutDate")
+            sign_out_time = session_row.get("SignOutTime")
+            sign_out_stamp = f"{sign_out_date or ''} {sign_out_time or ''}".strip()
+            if not sign_in_stamp:
+                continue
+
+            cursor.execute("""
+                SELECT
+                    COUNT(DISTINCT AccessID) AS AccessCount,
+                    GROUP_CONCAT(
+                        DISTINCT CASE
+                            WHEN ItemName IS NOT NULL AND ItemName != '' THEN ItemName
+                        END
+                    ) AS AccessedItems
+                FROM user_item_access
+                WHERE Email = ?
+                  AND ((AccessDate || ' ' || AccessTime) >= ?)
+                  AND (? = '' OR (AccessDate || ' ' || AccessTime) <= ?)
+            """, (
+                session_row.get("Email") or "",
+                sign_in_stamp,
+                sign_out_stamp,
+                sign_out_stamp,
+            ))
+            fallback_row = cursor.fetchone()
+            if not fallback_row:
+                continue
+
+            fallback_access_count = fallback_row["AccessCount"] or 0
+            fallback_accessed_items = fallback_row["AccessedItems"]
+            if fallback_access_count:
+                session_row["AccessCount"] = fallback_access_count
+                session_row["AccessedItems"] = fallback_accessed_items
     except sqlite3.Error as e:
         print("An error occurred while loading user tracking:", e.args[0])
     finally:
@@ -650,6 +855,7 @@ def load_checkout_request_items(current_email=""):
                 "UPC": upc,
                 "Name": record.get("Name") or "Unknown Item",
                 "TotalQty": record.get("TotalQty") or 0,
+                "Thumbnail": get_item_image_url(record.get("Name") or "Unknown Item"),
                 "Identifiers": [],
             })
             item["Identifiers"].append({
@@ -671,6 +877,116 @@ def load_checkout_request_items(current_email=""):
 
     return list(items_by_upc.values())
 
+def get_item_email_inline_image(item_name):
+    image_url = get_item_image_url(item_name)
+    if not image_url:
+        return None
+
+    try:
+        if image_url.startswith("data:image/"):
+            header, payload = image_url.split(",", 1)
+            mime_type = header[5:].split(";", 1)[0].strip().lower() or "image/png"
+            if ";base64" in header.lower():
+                image_bytes = base64.b64decode(payload)
+            else:
+                image_bytes = unquote(payload).encode("utf-8")
+            maintype, subtype = (mime_type.split("/", 1) + ["png"])[:2]
+            return {
+                "bytes": image_bytes,
+                "maintype": maintype,
+                "subtype": subtype,
+            }
+
+        if image_url.startswith("/static/"):
+            relative_path = image_url.lstrip("/").replace("/", os.sep)
+            file_path = os.path.join(os.getcwd(), relative_path)
+            if os.path.exists(file_path):
+                mime_type, _ = mimetypes.guess_type(file_path)
+                mime_type = (mime_type or "image/png").lower()
+                with open(file_path, "rb") as image_file:
+                    image_bytes = image_file.read()
+                maintype, subtype = (mime_type.split("/", 1) + ["png"])[:2]
+                return {
+                    "bytes": image_bytes,
+                    "maintype": maintype,
+                    "subtype": subtype,
+                }
+    except Exception as exc:
+        print(f"Could not load email image for {item_name}: {exc}")
+
+    return None
+
+def send_checkout_notification(action, item_name, unit_identifier, user_email, uri_id="", event_date="", event_time="", first_name="", last_name=""):
+    recipient_emails = []
+    for value in [*CHECKOUT_NOTIFY_EMAILS, user_email]:
+        normalized_email = (value or "").strip().lower()
+        if normalized_email and normalized_email not in recipient_emails:
+            recipient_emails.append(normalized_email)
+
+    if not recipient_emails:
+        return False
+    if not SMTP_HOST or not SMTP_FROM_EMAIL:
+        print("Checkout email notification skipped: SMTP is not configured.")
+        return False
+
+    normalized_action = (action or "").strip().lower()
+    action_label = "checked out" if normalized_action == "checkout" else "checked in"
+    timestamp_line = " ".join(part for part in [event_date, event_time] if part).strip() or "Unknown time"
+    full_name = " ".join(part for part in [(first_name or "").strip(), (last_name or "").strip()] if part).strip() or "Unknown name"
+
+    message = EmailMessage()
+    message["Subject"] = f"Item {action_label}: {unit_identifier or 'Unknown ID'}"
+    message["From"] = SMTP_FROM_EMAIL
+    message["To"] = ", ".join(recipient_emails)
+    text_lines = [
+        f"An item was {action_label} for {full_name}.",
+        "",
+        f"Item Name: {item_name or 'Unknown item'}",
+        f"Item ID: {unit_identifier or 'Unknown'}",
+        f"Email: {user_email}",
+        f"URI ID: {uri_id or 'Unknown'}",
+    ]
+    message.set_content("\n".join(text_lines))
+
+    image_payload = get_item_email_inline_image(item_name)
+    html_lines = [
+        f"<p>An item was {escape(action_label)} for {escape(full_name or 'Unknown user')}.</p>",
+        "<p>",
+        f"Item Name: {escape(item_name or 'Unknown item')}<br>",
+        f"Item ID: {escape(unit_identifier or 'Unknown')}<br>",
+        f"Email: {escape(user_email)}<br>",
+        f"URI ID: {escape(uri_id or 'Unknown')}",
+        "</p>",
+    ]
+    if image_payload:
+        html_lines.append("<p><img src=\"cid:item-image\" alt=\"Item image\" style=\"max-width: 320px; height: auto;\"></p>")
+    message.add_alternative("".join(html_lines), subtype="html")
+    if image_payload:
+        message.get_payload()[-1].add_related(
+            image_payload["bytes"],
+            maintype=image_payload["maintype"],
+            subtype=image_payload["subtype"],
+            cid="<item-image>",
+        )
+
+    try:
+        if SMTP_USE_SSL:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+                if SMTP_USERNAME:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+                if SMTP_USE_TLS:
+                    server.starttls()
+                if SMTP_USERNAME:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(message)
+        return True
+    except Exception as exc:
+        print(f"Checkout email notification failed: {exc}")
+        return False
+
 def return_checkout_request(identifier_id, email):
     email = (email or "").strip().lower()
     if not email:
@@ -680,7 +996,7 @@ def return_checkout_request(identifier_id, email):
     cursor = db.cursor()
     try:
         cursor.execute("""
-            SELECT LogID, IdentifierID, UnitIdentifier, Email
+            SELECT LogID, IdentifierID, UnitIdentifier, Email, ItemName, UriId, FirstName, LastName
             FROM checkout_log
             WHERE IdentifierID = ? AND IsActive = 1
         """, (identifier_id,))
@@ -718,6 +1034,17 @@ def return_checkout_request(identifier_id, email):
             (check_in_date, check_in_time, record["LogID"])
         )
         db.commit()
+        send_checkout_notification(
+            "return",
+            record.get("ItemName") or "",
+            record.get("UnitIdentifier") or "",
+            checked_out_by,
+            record.get("UriId") or "",
+            check_in_date,
+            check_in_time,
+            record.get("FirstName") or "",
+            record.get("LastName") or "",
+        )
         return {
             "IdentifierID": record["IdentifierID"],
             "UnitIdentifier": record.get("UnitIdentifier") or "",
@@ -733,13 +1060,17 @@ def return_checkout_request(identifier_id, email):
     finally:
         db.close()
 
-def create_checkout_request(identifier_id, email, session_id, uri_id):
+def create_checkout_request(identifier_id, email, session_id, uri_id, first_name, last_name):
     email = (email or "").strip().lower()
     if not email:
         return None, "You must be signed in to request a checkout."
     normalized_uri_id = re.sub(r"\D", "", str(uri_id or ""))
+    normalized_first_name = " ".join(str(first_name or "").split()).strip()
+    normalized_last_name = " ".join(str(last_name or "").split()).strip()
     if not re.fullmatch(r"\d{9}", normalized_uri_id):
         return None, "Enter a valid 9-digit URI ID number."
+    if not normalized_first_name or not normalized_last_name:
+        return None, "Enter both a first and last name."
 
     db = get_db()
     cursor = db.cursor()
@@ -783,6 +1114,8 @@ def create_checkout_request(identifier_id, email, session_id, uri_id):
                 SessionID,
                 Email,
                 UriId,
+                FirstName,
+                LastName,
                 IdentifierID,
                 UPC,
                 UnitIdentifier,
@@ -790,11 +1123,13 @@ def create_checkout_request(identifier_id, email, session_id, uri_id):
                 CheckOutDate,
                 CheckOutTime,
                 IsActive
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (
             session_id,
             email,
             normalized_uri_id,
+            normalized_first_name,
+            normalized_last_name,
             record["IdentifierID"],
             record["UPC"],
             record["UnitIdentifier"],
@@ -803,6 +1138,17 @@ def create_checkout_request(identifier_id, email, session_id, uri_id):
             requested_time,
         ))
         db.commit()
+        send_checkout_notification(
+            "checkout",
+            record.get("Name") or "",
+            record.get("UnitIdentifier") or "",
+            email,
+            normalized_uri_id,
+            requested_date,
+            requested_time,
+            normalized_first_name,
+            normalized_last_name,
+        )
         return {
             "IdentifierID": record["IdentifierID"],
             "UnitIdentifier": record["UnitIdentifier"],
@@ -921,16 +1267,18 @@ def load_database_entry(entry_id):
                 ib.Date,
                 ib.Time,
                 i.TotalQty,
-                b.BinType,
-                b.BinID,
-                w.WallName,
-                r.RoomName,
+                COALESCE(b.BinType, CASE WHEN ib.BinUPC IS NULL THEN 'None' END) AS BinType,
+                CASE WHEN ib.BinUPC IS NULL THEN NULL ELSE b.BinID END AS BinID,
+                CASE WHEN ib.BinUPC IS NULL THEN NULL ELSE w.WallName END AS WallName,
+                COALESCE(r.RoomName, br.RoomName, rd.RoomName) AS RoomName,
                 COALESCE(id_counts.IdentifierCount, 0) AS IdentifierCount
             FROM item_bin ib
             LEFT JOIN items i ON i.UPC = ib.UPC
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms br ON br.RoomID = b.RoomID
+            LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
             LEFT JOIN (
                 SELECT UPC, COUNT(*) AS IdentifierCount
                 FROM item_identifiers
@@ -963,10 +1311,11 @@ def load_bins_directory():
                 b.BinType,
                 b.Coordinates,
                 w.WallName,
-                r.RoomName
+                COALESCE(r.RoomName, br.RoomName) AS RoomName
             FROM bins b
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms br ON br.RoomID = b.RoomID
             ORDER BY
                 r.RoomName,
                 w.WallName,
@@ -994,10 +1343,11 @@ def load_bin_row(bin_upc):
                 b.BinType,
                 b.Coordinates,
                 w.WallName,
-                r.RoomName
+                COALESCE(r.RoomName, br.RoomName) AS RoomName
             FROM bins b
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms br ON br.RoomID = b.RoomID
             WHERE b.BinUPC = ?
         """, (bin_upc,))
         row = cursor.fetchone()
@@ -1022,10 +1372,11 @@ def load_floorplan_bin_markers():
                 b.BinType,
                 b.Coordinates,
                 w.WallName,
-                r.RoomName
+                COALESCE(r.RoomName, br.RoomName) AS RoomName
             FROM bins b
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms br ON br.RoomID = b.RoomID
             WHERE b.Coordinates IS NOT NULL AND TRIM(b.Coordinates) != ''
             ORDER BY r.RoomName, w.WallName, b.BinType, b.BinID
         """)
@@ -1057,6 +1408,8 @@ def load_help_inventory_snapshot():
                 i.TotalQty,
                 GROUP_CONCAT(
                     DISTINCT CASE
+                        WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN
+                            rd.RoomName
                         WHEN r.RoomName IS NOT NULL THEN
                             r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                     END
@@ -1066,6 +1419,7 @@ def load_help_inventory_snapshot():
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
             GROUP BY i.UPC, i.Name, i.TotalQty
             ORDER BY i.Name
         """)
@@ -1333,11 +1687,15 @@ def load_recently_changed_items(limit=5):
                 MAX(datetime(ib.Date || ' ' || ib.Time)) AS LastChanged,
                 GROUP_CONCAT(
                     DISTINCT CASE
-                        WHEN r.RoomName IS NOT NULL THEN r.RoomName
+                        WHEN COALESCE(r.RoomName, br.RoomName, rd.RoomName) IS NOT NULL THEN COALESCE(r.RoomName, br.RoomName, rd.RoomName)
                     END
                 ) AS Rooms,
                 GROUP_CONCAT(
                     DISTINCT CASE
+                        WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN
+                            rd.RoomName
+                        WHEN COALESCE(r.RoomName, br.RoomName) IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL AND w.WallName IS NULL THEN
+                            COALESCE(r.RoomName, br.RoomName) || ' ' || b.BinType || ' ' || b.BinID
                         WHEN r.RoomName IS NOT NULL AND w.WallName IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL THEN
                             r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                     END
@@ -1352,6 +1710,8 @@ def load_recently_changed_items(limit=5):
             LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
             LEFT JOIN walls w ON w.WallID = b.WallID
             LEFT JOIN rooms r ON r.RoomID = w.RoomID
+            LEFT JOIN rooms br ON br.RoomID = b.RoomID
+            LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
             GROUP BY i.UPC, i.Name, i.TotalQty
             ORDER BY LastChanged DESC, i.Name
             LIMIT ?
@@ -1371,7 +1731,7 @@ def load_recently_changed_items(limit=5):
 
     return items
 
-def load_sign_in_showcase_items(limit=12):
+def load_sign_in_showcase_items(limit=18):
     image_map = load_item_image_map()
     if not image_map:
         return []
@@ -1400,12 +1760,13 @@ def load_sign_in_showcase_items(limit=12):
                 "TotalQty": row["TotalQty"],
                 "ImageUrl": image_url,
             })
-            if len(items) >= limit:
-                break
     except sqlite3.Error as e:
         print("An error occurred while loading sign-in showcase items:", e.args[0])
     finally:
         db.close()
+
+    if len(items) > limit:
+        items = random.sample(items, limit)
 
     return items
 
@@ -1586,10 +1947,13 @@ def load_search_cards(search_query="", upcs=None):
                     i.UPC,
                     i.Name,
                     i.TotalQty,
-                    COUNT(DISTINCT ib.BinUPC) AS LocationCount,
+                    COUNT(DISTINCT CASE
+                        WHEN ib.BinUPC IS NOT NULL THEN 'B:' || CAST(ib.BinUPC AS TEXT)
+                        WHEN ib.RoomID IS NOT NULL THEN 'R:' || CAST(ib.RoomID AS TEXT)
+                    END) AS LocationCount,
                     GROUP_CONCAT(
                         DISTINCT CASE
-                            WHEN r.RoomName IS NOT NULL THEN r.RoomName
+                            WHEN COALESCE(r.RoomName, br.RoomName, rd.RoomName) IS NOT NULL THEN COALESCE(r.RoomName, br.RoomName, rd.RoomName)
                         END
                     ) AS Rooms,
                     GROUP_CONCAT(
@@ -1599,6 +1963,9 @@ def load_search_cards(search_query="", upcs=None):
                     ) AS WallNames,
                     GROUP_CONCAT(
                         DISTINCT CASE
+                            WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN rd.RoomName
+                            WHEN COALESCE(r.RoomName, br.RoomName) IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL AND w.WallName IS NULL THEN
+                                COALESCE(r.RoomName, br.RoomName) || ' ' || b.BinType || ' ' || b.BinID
                             WHEN r.RoomName IS NOT NULL AND w.WallName IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL THEN
                                 r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                         END
@@ -1614,6 +1981,8 @@ def load_search_cards(search_query="", upcs=None):
                 LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
                 LEFT JOIN walls w ON w.WallID = b.WallID
                 LEFT JOIN rooms r ON r.RoomID = w.RoomID
+                LEFT JOIN rooms br ON br.RoomID = b.RoomID
+                LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
                 WHERE i.UPC IN ({placeholders})
                 GROUP BY i.UPC, i.Name, i.TotalQty
                 ORDER BY LastChanged DESC, i.Name
@@ -1627,10 +1996,13 @@ def load_search_cards(search_query="", upcs=None):
                     i.UPC,
                     i.Name,
                     i.TotalQty,
-                    COUNT(DISTINCT ib.BinUPC) AS LocationCount,
+                    COUNT(DISTINCT CASE
+                        WHEN ib.BinUPC IS NOT NULL THEN 'B:' || CAST(ib.BinUPC AS TEXT)
+                        WHEN ib.RoomID IS NOT NULL THEN 'R:' || CAST(ib.RoomID AS TEXT)
+                    END) AS LocationCount,
                     GROUP_CONCAT(
                         DISTINCT CASE
-                            WHEN r.RoomName IS NOT NULL THEN r.RoomName
+                            WHEN COALESCE(r.RoomName, br.RoomName, rd.RoomName) IS NOT NULL THEN COALESCE(r.RoomName, br.RoomName, rd.RoomName)
                         END
                     ) AS Rooms,
                     GROUP_CONCAT(
@@ -1640,6 +2012,9 @@ def load_search_cards(search_query="", upcs=None):
                     ) AS WallNames,
                     GROUP_CONCAT(
                         DISTINCT CASE
+                            WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN rd.RoomName
+                            WHEN COALESCE(r.RoomName, br.RoomName) IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL AND w.WallName IS NULL THEN
+                                COALESCE(r.RoomName, br.RoomName) || ' ' || b.BinType || ' ' || b.BinID
                             WHEN r.RoomName IS NOT NULL AND w.WallName IS NOT NULL AND b.BinType IS NOT NULL AND b.BinID IS NOT NULL THEN
                                 r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
                         END
@@ -1655,6 +2030,8 @@ def load_search_cards(search_query="", upcs=None):
                 LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
                 LEFT JOIN walls w ON w.WallID = b.WallID
                 LEFT JOIN rooms r ON r.RoomID = w.RoomID
+                LEFT JOIN rooms br ON br.RoomID = b.RoomID
+                LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
                 WHERE CAST(i.UPC AS TEXT) LIKE ? OR i.Name LIKE ?
                 GROUP BY i.UPC, i.Name, i.TotalQty
                 ORDER BY
@@ -1705,13 +2082,17 @@ def find_item_records(query_text):
                     i.Name,
                     i.TotalQty,
                     GROUP_CONCAT(
-                        DISTINCT r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
+                        DISTINCT CASE
+                            WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN rd.RoomName
+                            WHEN r.RoomName IS NOT NULL THEN r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
+                        END
                     ) AS Locations
                 FROM items i
                 LEFT JOIN item_bin ib ON ib.UPC = i.UPC
                 LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
                 LEFT JOIN walls w ON w.WallID = b.WallID
                 LEFT JOIN rooms r ON r.RoomID = w.RoomID
+                LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
                 WHERE CAST(i.UPC AS TEXT) = ?
                 GROUP BY i.UPC, i.Name, i.TotalQty
                 ORDER BY i.Name
@@ -1724,13 +2105,17 @@ def find_item_records(query_text):
                     i.Name,
                     i.TotalQty,
                     GROUP_CONCAT(
-                        DISTINCT r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
+                        DISTINCT CASE
+                            WHEN ib.BinUPC IS NULL AND rd.RoomName IS NOT NULL THEN rd.RoomName
+                            WHEN r.RoomName IS NOT NULL THEN r.RoomName || ' ' || w.WallName || ' ' || b.BinType || ' ' || b.BinID
+                        END
                     ) AS Locations
                 FROM items i
                 LEFT JOIN item_bin ib ON ib.UPC = i.UPC
                 LEFT JOIN bins b ON b.BinUPC = ib.BinUPC
                 LEFT JOIN walls w ON w.WallID = b.WallID
                 LEFT JOIN rooms r ON r.RoomID = w.RoomID
+                LEFT JOIN rooms rd ON rd.RoomID = ib.RoomID
                 WHERE i.Name LIKE ? OR CAST(i.UPC AS TEXT) LIKE ?
                 GROUP BY i.UPC, i.Name, i.TotalQty
                 ORDER BY
@@ -3250,8 +3635,9 @@ def find_item_image_via_ai(item_name, excluded_hosts=None):
     rejected_hosts = set(excluded_hosts or [])
     code_search_found_any_sources = False
     image_agent_available = get_image_agent_client() is not None
+    image_ai_web_search_enabled = image_agent_available and IMAGE_AGENT_AI_WEB_SEARCH
 
-    if image_agent_available:
+    if image_ai_web_search_enabled:
         ai_attempts = max(IMAGE_AGENT_PAGE_ATTEMPTS + 1, 4)
         for retailer_only in (True, False):
             direct_feedback = ""
@@ -3359,7 +3745,10 @@ def find_item_image_via_ai(item_name, excluded_hosts=None):
 
                 rejected_hosts.add(get_url_host(source_url))
 
-        should_use_ai_fallback = (IMAGE_AGENT_AI_SEARCH_FALLBACK or not code_search_found_any_sources) and image_agent_available
+        should_use_ai_fallback = (
+            image_ai_web_search_enabled and
+            (IMAGE_AGENT_AI_SEARCH_FALLBACK or not code_search_found_any_sources)
+        )
         if should_use_ai_fallback:
             feedback = ""
             fallback_attempts = 1 if not code_search_found_any_sources else IMAGE_AGENT_PAGE_ATTEMPTS
@@ -3846,13 +4235,31 @@ def editor_auth():
 
 @app.route('/db', methods=['GET', 'POST'])
 def db():
+    if not is_signed_in():
+        return redirect(url_for('sign_in_page'))
     if not session.get("database_authenticated"):
-        return redirect(url_for('home'))
+        return render_template(
+            'db.html',
+        entries=[],
+        bins=[],
+        user_tracking=[],
+        checkout_history=[],
+        prompt_database_auth=True,
+        current_tracked_session_id=session.get("tracked_session_id"),
+    )
     entries = load_database_entries()
     bin_rows = load_bins_directory()
     user_tracking = load_user_tracking()
     checkout_history = load_checkout_history()
-    return render_template('db.html', entries=entries, bins=bin_rows, user_tracking=user_tracking, checkout_history=checkout_history)
+    return render_template(
+        'db.html',
+        entries=entries,
+        bins=bin_rows,
+        user_tracking=user_tracking,
+        checkout_history=checkout_history,
+        prompt_database_auth=False,
+        current_tracked_session_id=session.get("tracked_session_id"),
+    )
 
 @app.route('/database-auth', methods=['POST'])
 def database_auth():
@@ -3965,6 +4372,53 @@ def track_item_access():
 
     return jsonify({"success": True}), 200
 
+@app.route('/end-user-session', methods=['POST'])
+def end_user_session():
+    if not is_signed_in():
+        return jsonify({"error": "Sign-in required", "redirect": url_for("sign_in_page")}), 401
+    if not session.get("database_authenticated"):
+        return jsonify({"error": "Database access required"}), 403
+
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("session_id")
+    try:
+        session_id = int(session_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Session ID must be numeric"}), 400
+
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        cursor.execute("""
+            SELECT SessionID, Email, SignOutDate, SignOutTime
+            FROM user_sessions
+            WHERE SessionID = ?
+        """, (session_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Session not found"}), 404
+        if row["SignOutDate"] is not None and row["SignOutTime"] is not None:
+            return jsonify({"error": "Session is already ended"}), 400
+    finally:
+        db.close()
+
+    log_user_sign_out(session_id)
+
+    is_current_user_session = session_id == session.get("tracked_session_id")
+    if is_current_user_session:
+        session.clear()
+        return jsonify({
+            "success": True,
+            "ended_current_session": True,
+            "redirect": url_for("sign_in_page"),
+        }), 200
+
+    return jsonify({
+        "success": True,
+        "ended_current_session": False,
+        "session_id": session_id,
+    }), 200
+
 @app.route('/update-item', methods=['POST'])
 def update_item():
     data = request.get_json(silent=True) or {}
@@ -4025,8 +4479,16 @@ def update_entry():
     wall = data.get('wall', '').strip()
     storage_type = data.get('storage_type', '').strip()
     bin_number = data.get('bin_number')
+    room_only_location = storage_type == 'None' and not str(bin_number or '').strip()
 
-    if not entry_id or not name or qty in (None, '') or not room or not wall or not storage_type or not bin_number:
+    if (
+        not entry_id
+        or not name
+        or qty in (None, '')
+        or not room
+        or not storage_type
+        or (not room_only_location and (not wall or not bin_number))
+    ):
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
@@ -4046,33 +4508,46 @@ def update_entry():
         upc = existing["UPC"]
         old_qty = existing["Qty"]
 
-        wall_id = functions.wallDecider(wall, room)
-        cursor.execute(
-            "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ? AND WallID = ?",
-            (storage_type, bin_number, wall_id)
-        )
-        bin_row = cursor.fetchone()
+        room_id = functions.roomIDDecider(room)
+        if not room_id:
+            return jsonify({"error": "Invalid room"}), 400
 
-        if bin_row:
-            bin_upc = bin_row["BinUPC"]
+        if room_only_location:
+            bin_upc = None
         else:
-            try:
-                desired_bin = int(bin_number)
-            except (TypeError, ValueError):
-                return jsonify({"error": "Invalid bin number"}), 400
+            if storage_type == 'None' and not wall:
+                cursor.execute(
+                    "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ? AND RoomID = ?",
+                    (storage_type, bin_number, room_id)
+                )
+            else:
+                wall_id = functions.wallDecider(wall, room)
+                cursor.execute(
+                    "SELECT BinUPC FROM bins WHERE BinType = ? AND BinID = ? AND WallID = ?",
+                    (storage_type, bin_number, wall_id)
+                )
+            bin_row = cursor.fetchone()
 
-            if desired_bin != 1:
-                return jsonify({"error": "That bin does not exist. Create bins sequentially."}), 400
+            if bin_row:
+                bin_upc = bin_row["BinUPC"]
+            else:
+                try:
+                    desired_bin = int(bin_number)
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid bin number"}), 400
 
-            _, bin_upc = functions.createBin(storage_type, wall, room)
+                if desired_bin != 1:
+                    return jsonify({"error": "That bin does not exist. Create bins sequentially."}), 400
+
+                _, bin_upc = functions.createBin(storage_type, wall, room)
 
         now = datetime.now()
         current_date = now.strftime("%Y-%m-%d")
         current_time = now.strftime("%H:%M:%S")
 
         cursor.execute(
-            "UPDATE item_bin SET Name = ?, Qty = ?, BinUPC = ?, Date = ?, Time = ? WHERE EntryID = ?",
-            (name, qty, bin_upc, current_date, current_time, entry_id)
+            "UPDATE item_bin SET Name = ?, Qty = ?, BinUPC = ?, RoomID = ?, Date = ?, Time = ? WHERE EntryID = ?",
+            (name, qty, bin_upc, room_id, current_date, current_time, entry_id)
         )
 
         qty_diff = qty - old_qty
@@ -4202,6 +4677,8 @@ def checkout_request_item():
     data = request.get_json(silent=True) or {}
     identifier_id = data.get('identifier_id')
     uri_id = data.get('uri_id', '')
+    first_name = data.get('first_name', '')
+    last_name = data.get('last_name', '')
 
     if not identifier_id:
         return jsonify({"error": "Missing identifier ID"}), 400
@@ -4221,7 +4698,7 @@ def checkout_request_item():
         if tracked_session_id:
             session["tracked_session_id"] = tracked_session_id
 
-    result, error = create_checkout_request(identifier_id, email, tracked_session_id, uri_id)
+    result, error = create_checkout_request(identifier_id, email, tracked_session_id, uri_id, first_name, last_name)
     if error:
         status_code = 409 if result else 400
         return jsonify({
@@ -4363,7 +4840,7 @@ def update_item_identifier_checkout_route():
                 ii.UPC,
                 CASE WHEN c.IdentifierID IS NOT NULL THEN 1 ELSE 0 END AS IsCheckedOut
             FROM item_identifiers ii
-            LEFT JOIN checkout_requests c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
+            LEFT JOIN checkout_log c ON c.IdentifierID = ii.IdentifierID AND c.IsActive = 1
             WHERE ii.IdentifierID = ?
         """, (identifier_id,))
         row = cursor.fetchone()
@@ -4416,6 +4893,8 @@ def print_bin_label():
         bin_row = cursor.fetchone()
         if not bin_row:
             return jsonify({"error": "Bin not found"}), 404
+        if bin_row["BinType"] == "None":
+            return jsonify({"error": "None bins do not have printable labels"}), 400
     finally:
         db.close()
 
@@ -4436,14 +4915,16 @@ def create_bin():
     quantity = data.get('quantity', 1)
     coordinates = normalize_bin_coordinates(data.get('coordinates', ''))
 
-    if not room or not wall or not storage_type:
+    room_level_none_bin = storage_type == "None" and not wall
+
+    if not room or not storage_type or (not room_level_none_bin and not wall):
         return jsonify({"error": "Missing required fields"}), 400
 
     valid_rooms = {"110", "110A", "110B", "110C"}
     valid_walls = {"North", "South", "East", "West"}
-    valid_storage_types = {"Bin", "Shelf", "Drawer", "Cabinet", "Tabletop", "Overhead", "Other"}
+    valid_storage_types = {"Bin", "Shelf", "Drawer", "Cabinet", "Tabletop", "Overhead", "Other", "None"}
 
-    if room not in valid_rooms or wall not in valid_walls or storage_type not in valid_storage_types:
+    if room not in valid_rooms or storage_type not in valid_storage_types or (wall and wall not in valid_walls):
         return jsonify({"error": "Invalid bin details"}), 400
 
     try:
@@ -4566,8 +5047,15 @@ def create_item():
         bin_number = data.get('bin', '')
         item_name = data.get('item_name', '')
         quantity = data.get('quantity', '')
+        room_only_location = storage_type == 'None' and not str(bin_number or '').strip()
         # if any of the required fields are missing, return an error
-        if not room or not wall or not storage_type or not bin_number or not item_name or not quantity:
+        if (
+            not room
+            or not storage_type
+            or not item_name
+            or not quantity
+            or (not room_only_location and (not wall or not bin_number))
+        ):
             return jsonify({"error": "Missing required fields"}), 300
         else:
             functions.createItemLocator(item_name, bin_number, quantity, storage_type, wall, room)
@@ -4679,12 +5167,15 @@ def cancel_item_image():
     return jsonify({"success": True, "status": IMAGE_STATUS_FAILED}), 200
 
 def query_bins_from_database(room, wall, storage_type):
-    WallID = functions.wallDecider(wall,room)
-    theList = functions.returnBinList(WallID, storage_type)
+    if not room:
+        return []
+    wall_id = functions.wallDecider(wall, room) if wall else None
+    room_id = functions.roomIDDecider(room)
+    theList = functions.returnBinList(wall_id, storage_type, room_id if storage_type == "None" and not wall else None)
     print(theList)
     return theList
 
 
 if __name__ == '__main__':
     app.config["TEMPLATES_AUTO_RELOAD"] = True
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

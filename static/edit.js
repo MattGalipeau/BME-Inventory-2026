@@ -215,10 +215,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const wallSelect = document.getElementById('walls');
     const storageTypeSelect = document.getElementById('bin-type');
     const binSelect = document.getElementById('bin');
+    const ROOM_ONLY_STORAGE_TYPE = 'None';
+
+    function isRoomOnlyStorageType(value) {
+        return value === ROOM_ONLY_STORAGE_TYPE;
+    }
 
     // Function to check if all required fields have values
     function checkEnableBinDropdown() {
-        if (roomSelect.value && wallSelect.value && storageTypeSelect.value) {
+        wallSelect.disabled = false;
+
+        if (isRoomOnlyStorageType(storageTypeSelect.value)) {
+            if (!roomSelect.value) {
+                binSelect.disabled = true;
+                binSelect.innerHTML = `
+                <option value="">--Select Bin--</option>
+                `;
+                return;
+            }
+        }
+
+        if (roomSelect.value && storageTypeSelect.value && (wallSelect.value || isRoomOnlyStorageType(storageTypeSelect.value))) {
             binSelect.disabled = false;
             fetchBinOptions(); // Fetch bins when all fields are selected
         } else {
@@ -252,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 const bins = await response.json();
-                populateBinDropdown(bins);
+                populateBinDropdown(bins, isRoomOnlyStorageType(storageType));
             } else {
                 console.error('Failed to fetch bins:', response.statusText);
             }
@@ -262,11 +279,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Function to populate the "Bin Number" dropdown
-    function populateBinDropdown(bins) {
+    function populateBinDropdown(bins, includeRoomOnly = false) {
         binSelect.innerHTML = `
         <option value="">--Select Bin--</option>
-        <option value="CREATE">CREATE NEW BIN</option>
     `;
+        if (includeRoomOnly) {
+            const roomOnlyOption = document.createElement('option');
+            roomOnlyOption.value = '';
+            roomOnlyOption.textContent = 'Room Only';
+            binSelect.appendChild(roomOnlyOption);
+        }
+        binSelect.innerHTML += '<option value="CREATE">CREATE NEW BIN</option>';
         bins.forEach(bin => {
             const option = document.createElement('option');
             option.value = bin.id; // Assuming `bin.id` is the unique identifier
