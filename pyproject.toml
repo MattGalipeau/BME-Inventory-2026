@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "BME inventory web application"
 requires-python = ">=3.12"
 dependencies = [
-  "Flask",
+  "flask",
   "openai",
   "python-dotenv",
 ]
