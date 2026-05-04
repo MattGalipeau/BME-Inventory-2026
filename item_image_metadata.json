@@ -415,12 +415,12 @@
     "note": "Resolved from source page image candidates.",
     "source_url": "",
     "status": "success",
-    "trigger": "new_item_create",
-    "updated_at": "2026-04-27T18:49:34",
+    "trigger": "manual_retry",
+    "updated_at": "2026-05-04T14:18:48",
     "validation": {
       "approved": true,
       "confidence": 0.95,
-      "reason": "The image clearly depicts a Nintendo Wii console in white along with its remote, matching the product description. The photo is clean and maintains a focus on the product without distractions, aligning well with typical retailer/manufacturer photo styles."
+      "reason": "The image clearly shows the Nintendo Wii console and the Wii remote, which matches the product name 'Nintendo Wii, White'. The focus is on the product with a clean background, suitable for a retailer or manufacturer listing."
     }
   },
   "Othermill Desktop CNC": {
