@@ -12,6 +12,20 @@
       "reason": "The image clearly shows resistors similar to the described item in a clean and professional style suitable for a product listing."
     }
   },
+  "100 Ohm 1/4 Watt Resistor": {
+    "image_url": "/static/item-images/100-ohm-1-4-watt-resistor-d2206d0889.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_image_url": "https://img2.exportersindia.com/product_images/bc-full/2025/2/12451055/100-ohm-1-4-watt-resistor-with-5-tolerance-pack-1739161389-7854474.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_localize_existing_image",
+    "updated_at": "2026-04-26T19:24:36",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
   "12mm Label Tape Cassette, Black on Blue": {
     "image_url": "/static/item-images/12mm-label-tape-cassette-black-on-blue-65ed2e8a4b.jpg",
     "note": "Resolved from source page image candidates.",
@@ -142,6 +156,34 @@
       "reason": "The image clearly displays a 12mm label tape cassette with a black on yellow design, matching the product description. The photo is clean and fits the style of a product listing."
     }
   },
+  "1ft. USB-C to USB-A Cable": {
+    "image_url": "/static/item-images/1ft-usb-c-to-usb-a-cable-a56b7c36e1.png",
+    "note": "Used the first live image from a retailer product page as a final fallback.",
+    "source_image_url": "https://apps.apple.com//assets/images/share/app-store.png",
+    "source_url": "https://apps.apple.com",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:43:22",
+    "validation": {
+      "approved": true,
+      "confidence": 0.3,
+      "reason": "Final fallback: first live retailer product image used before failing."
+    }
+  },
+  "1kg Black PLA Filament": {
+    "image_url": "/static/item-images/1kg-black-pla-filament-cb8d88eaca.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_image_url": "https://eu.craftbot.com/4681-large_default/filament-pla-black-1kg.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:49:56",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
   "24mm Label Tape Cassette, Black (TZe)": {
     "note": "No valid image source was found.",
     "status": "failed",
@@ -195,6 +237,20 @@
       "reason": "The image clearly shows the Anker 7-in-1 USB-C Hub with no distractions, and it follows a clean product photo style typical of retail listings."
     }
   },
+  "Audio-Technica LP70X": {
+    "image_url": "/static/item-images/audio-technica-lp70x-d642197e5c.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://www.audio-technica.com/media/catalog/product/cache/177161fc218aa2dd413f2b73f6832b88/a/t/at-lp70x_bz_lifestyle_01a.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:34:58",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image depicts the Audio-Technica LP70X turntable clearly, showcasing its features and design in a clean manner suitable for a product listing."
+    }
+  },
   "Bambu AMS": {
     "image_url": "/static/item-images/bambu-ams-700d0dad98.jpg",
     "note": "Resolved from source page image candidates.",
@@ -207,6 +263,20 @@
       "reason": "The image shows a clear, centered product photo on a plain white background, depicting the Bambu Lab AMS 2 device with filament spools inside. The image style matches the clean retailer/manufacturer product-photo style and the product is clearly identifiable as the Bambu AMS."
     }
   },
+  "Bambu H2D": {
+    "image_url": "/static/item-images/bambu-h2d-cb140dd435.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://indicatetechnologies.com/cdn/shop/files/bambu-lab-h2d-combo-3d-printers-bambu-lab-indicate-technologies-631275.jpg?v=1743988175",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:43:38",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly depicts the Bambu H2D product in a clean and professional manner, matching the style of a retailer or manufacturer product photo."
+    }
+  },
   "Bambu P1S": {
     "image_url": "/static/item-images/bambu-p1s-fe8f677d13.jpg",
     "note": "Seeded from current approved image map.",
@@ -214,6 +284,12 @@
     "trigger": "current_inventory_seed",
     "updated_at": "2026-04-14T16:47:19",
     "validation": {}
+  },
+  "Bambu X1C": {
+    "note": "No valid image source was found.",
+    "status": "failed",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:43:16"
   },
   "Brother P-Touch Portable Label Printer": {
     "image_url": "/static/item-images/brother-p-touch-portable-label-printer-bca0561142.jpg",
@@ -332,6 +408,20 @@
       "reason": "The image displays a first aid kit along with its contents, which clearly represents the product. The photo is clean and well-organized, aligning with the style of a typical product listing."
     }
   },
+  "Gameboy Advance SP101": {
+    "image_url": "/static/item-images/gameboy-advance-sp101-c89eaa8f56.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://media.karousell.com/media/photos/products/2023/12/4/gameboy_advance_sp101_1701648233_284465e8_progressive.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:36:59",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows a Gameboy Advance SP101, presented in a clean and straightforward manner without distractions. It matches the desired product presentation style."
+    }
+  },
   "Glowforge Plus": {
     "image_url": "/static/item-images/glowforge-plus-e899f57b76.png",
     "note": "Seeded from current approved image map.",
@@ -376,6 +466,32 @@
       "reason": "The image shows a clean, centered product photo of an all-in-one desktop computer that matches the style and likely form factor of an IdeaCentre AIO AMD 27\" model in Luna Grey color. The background is plain white, which is typical for retailer/manufacturer product images."
     }
   },
+  "Lego Star Wars 40755": {
+    "image_url": "/static/item-images/lego-star-wars-40755-5c5b79087d.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:13:49",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows the Lego Star Wars 40755 set, featuring the vehicle and minifigures in a clean and uncluttered style that resembles a professional product listing."
+    }
+  },
+  "Lego Star Wars 70455": {
+    "image_url": "/static/item-images/lego-star-wars-70455-fc1cc082d3.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:14:13",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
   "Logitech S-00143 Speaker": {
     "image_url": "/static/item-images/logitech-s-00143-speaker-52f2f1e4b9.jpg",
     "note": "This is a retailer product page (Cash Converters UK) listing the Logitech S\u201100143 Multimedia Speakers with Subwoofer in black. It includes multiple accessible images of the product and not from the manufacturer\u2019s marketing site, meeting the requirement.",
@@ -402,6 +518,20 @@
       "reason": "The image features multiple representations of a Lucky Cat, displaying their iconic design and characteristics. The clean, neutral background and focus on the product align well with the style of a professional product listing."
     }
   },
+  "Mario Super Sluggers": {
+    "image_url": "/static/item-images/mario-super-sluggers-0b1c57f6e5.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://anthonysplace.ca/wp-content/uploads/2024/06/Mario-Super-Sluggers-Front-Cover-scaled.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:34:02",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows the cover art for 'Mario Super Sluggers', matching the product with a clean and focused presentation typical of retail listings."
+    }
+  },
   "Microscope": {
     "image_url": "/static/item-images/microscope-d3f04e5ab9.jpg",
     "note": "Seeded from current approved image map.",
@@ -409,6 +539,75 @@
     "trigger": "current_inventory_seed",
     "updated_at": "2026-04-14T16:47:19",
     "validation": {}
+  },
+  "Nike": {
+    "image_url": "/static/item-images/nike-520c6e7717.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_image_url": "https://www.shutterstock.com/shutterstock/photos/554480314/display_1500/stock-photo-samara-russia-january-product-shoot-of-nike-men-s-running-shoe-554480314.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:37:45",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
+  "Nike \"Lost At Sea\" Dunk High": {
+    "image_url": "/static/item-images/nike-lost-at-sea-dunk-high-0b17fd595e.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_image_url": "http://wycovintagebroadway.com/cdn/shop/products/Nike-SB-Dunk-High-Atlas-Lost-At-Sea-2020.jpg?v=1680291484",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:37:39",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
+  "Nintendo Switch Lite Dialga/Palkia Edition": {
+    "image_url": "/static/item-images/nintendo-switch-lite-dialga-palkia-edition-73f57add46.png",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:16:39",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
+  "Nintendo Wii Console, White": {
+    "image_url": "/static/item-images/nintendo-wii-console-white-4c46ee7ac7.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "http://j2games.com/cdn/shop/products/nintendo_wii_console_white_wii_sports_1__1.jpg?v=1668619374",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:32:53",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly shows the Nintendo Wii Console in white along with the remote, matching the product description well. It has a clean appearance typical of manufacturer listings."
+    }
+  },
+  "Nintendo Wii Nunchuck Controller": {
+    "image_url": "/static/item-images/nintendo-wii-nunchuck-controller-d257d8f41d.webp",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://cdn11.bigcommerce.com/s-ez2sytmqce/images/stencil/500x659/products/35257/46821/Screenshot_2025-12-11_at_21-41-26_Wired_Nunchuck_Controller_-_White_for_Nintendo_Wii_XYAB__05250.1765507313.png?c=2",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:33:23",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image clearly depicts a Nintendo Wii Nunchuck Controller, with a clean and simple presentation that matches product listing styles. It does not include any logos or unrelated elements."
+    }
   },
   "Othermill Desktop CNC": {
     "image_url": "/static/item-images/othermill-desktop-cnc-7846d43cb0.jpg",
@@ -428,6 +627,34 @@
       "approved": true,
       "confidence": 0.95,
       "reason": "The image shows a clean, centered product shot on a plain background. The product is clearly labeled 'P-touch CUBE Plus,' matching the named item. The style and presentation align well with typical manufacturer product photos."
+    }
+  },
+  "PLA Filament, 1kg, Black": {
+    "image_url": "/static/item-images/pla-filament-1kg-black-4420fabf8e.svg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_image_url": "https://opencircuit.shop/product/pla-filament-zwart-1.75-1kg-devil-design\",\"murl\":\"https://cdn.bodanius.com/media/1/4e0122447_pla-filament-1.75mm-1kg-black_x.png",
+    "source_url": "",
+    "status": "success",
+    "trigger": "manual_retry",
+    "updated_at": "2026-04-26T19:51:44",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
+  "PS5 Pro": {
+    "image_url": "/static/item-images/ps5-pro-aac83af64b.jpg",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://gamingbolt.com/wp-content/uploads/2024/11/PS5-Pro-1024x576.jpg",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:32:26",
+    "validation": {
+      "approved": true,
+      "confidence": 0.9,
+      "reason": "The image clearly depicts a gaming console that resembles the PS5 design. The photo has a clean, professional appearance suitable for a product listing."
     }
   },
   "Pacman Arcade Machine": {
@@ -541,6 +768,20 @@
       "reason": "The image clearly shows a black Lucky Cat with a swinging arm, matching the description closely. It is presented in a clean and appealing style suitable for a product listing."
     }
   },
+  "TI-84 Calculator": {
+    "image_url": "/static/item-images/ti-84-calculator-8be7d8fc03.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_image_url": "https://s3.amazonaws.com/bba-product-management/product_images/images/000/000/150/original/TI84Calculator.jpg?1586300800",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:32:49",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
+  },
   "Tabletop Band Saw": {
     "image_url": "/static/item-images/tabletop-band-saw-57ff044d7e.jpg",
     "note": "Resolved from source page image candidates.",
@@ -574,5 +815,45 @@
     "trigger": "current_inventory_seed",
     "updated_at": "2026-04-14T16:47:21",
     "validation": {}
+  },
+  "Wilder Woods Fever/Sky Vinyl": {
+    "image_url": "/static/item-images/wilder-woods-fever-sky-vinyl-fd340c8374.png",
+    "note": "Resolved from source page image candidates.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:15:03",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image clearly displays the 'Wilder Woods Fever/Sky Vinyl' alongside its cover artwork, matching the essence of a clean product listing photo. It focuses on the product without any distractions, effectively representing the item."
+    }
+  },
+  "Wilder Woods Self-Titled Vinyl": {
+    "image_url": "/static/item-images/wilder-woods-self-titled-vinyl-fee19f97ba.png",
+    "note": "Resolved from source page image candidates.",
+    "source_image_url": "https://cdn.shopify.com/s/files/1/0032/4832/4643/products/WILDERWOODS_FEVERSKY_LIGHTBLUEVINYL_transparent_Square_1066x.png?v=1672936666",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:30:37",
+    "validation": {
+      "approved": true,
+      "confidence": 0.95,
+      "reason": "The image displays the 'Wilder Woods Self-Titled Vinyl' clearly, showing both the album cover and the vinyl itself in a clean, professional manner that suits a product listing."
+    }
+  },
+  "iPhone 11 256GB": {
+    "image_url": "/static/item-images/iphone-11-256gb-624b5d8fb3.jpg",
+    "note": "Used the first live direct web image result as the final fallback.",
+    "source_url": "",
+    "status": "success",
+    "trigger": "new_item_create",
+    "updated_at": "2026-04-26T19:14:32",
+    "validation": {
+      "approved": true,
+      "confidence": 0.2,
+      "reason": "Final fallback: first live direct web image used before failing."
+    }
   }
 }

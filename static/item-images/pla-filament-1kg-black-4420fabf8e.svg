@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 109.49127 68.099998"
+   version="1.1"
+   id="svg24"
+   sodipodi:docname="63d144917_opencircuit.svg"
+   width="109.49126"
+   height="68.099998"
+   inkscape:version="1.1 (c68e22c387, 2021-05-23)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs28" />
+  <sodipodi:namedview
+     id="namedview26"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:zoom="2.017175"
+     inkscape:cx="125.91867"
+     inkscape:cy="33.46264"
+     inkscape:window-width="1920"
+     inkscape:window-height="1012"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg24" />
+  <g
+     fill="#ee1425"
+     class="text open"
+     id="g20"
+     transform="translate(0,-23)">
+    <path
+       d="M 26.7,23 C 5.3,23 0,29.8 0,57 0,84.3 5.3,91.1 26.7,91.1 48,91.1 53.3,84.3 53.3,57.1 53.3,29.8 48,23 26.7,23 Z m 0,53.7 c -11,0 -12.2,-2 -12.2,-19.7 0,-17.7 1.2,-19.6 12.2,-19.6 11,0 12.1,2 12.1,19.6 0,17.8 -1.2,19.7 -12.1,19.7 z"
+       id="path18"
+       sodipodi:nodetypes="ssssssssss" />
+  </g>
+  <path
+     fill="#333333"
+     d="m 100.20351,64.7043 h 0.0929 c -0.0619,4.19e-4 -0.12382,4.19e-4 -0.18573,0 z M 94.631569,38.977471 h 14.858501 c 0,10.498816 -1.02152,17.498026 -4.36469,21.848887 -1.34253,1.619774 -3.02435,2.912564 -4.92187,3.783357 -1.48586,0.756672 -2.971704,1.324176 -4.271822,1.702511 h 0.278598 l -2.600239,0.567503 h 0.09287 c -2.693103,0.472921 -4.643282,0.472921 -4.643282,0.472921 -1.857312,0.189167 -3.993222,0.283751 -6.221995,0.283751 -21.451963,0 -26.931034,-6.71546 -26.931034,-33.671878 0,-26.9564196 5.479071,-33.5772946 26.93103,-33.5772946 21.451964,0 26.745304,5.6750357 26.652434,28.5643456 H 94.631569 c 0.18573,-12.863413 -1.021522,-14.282173 -11.793933,-14.282173 -10.865278,0 -12.072531,1.891678 -12.072531,19.295122 0,17.498026 1.207253,19.484289 12.072531,19.484289 10.772411,0 11.979663,-1.513343 11.793933,-14.471341 z"
+     class="text circuit"
+     id="path22"
+     sodipodi:nodetypes="cccccccccccccsssccsssc"
+     style="stroke-width:0.937209" />
+</svg>

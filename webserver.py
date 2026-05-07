@@ -1458,7 +1458,7 @@ def load_item_image_map():
         return {}
 
     try:
-        with open(ITEM_IMAGES_FILE, "r", encoding="utf-8") as file:
+        with open(ITEM_IMAGES_FILE, "r", encoding="utf-8-sig") as file:
             data = json.load(file)
             if isinstance(data, dict):
                 return data
@@ -1480,7 +1480,7 @@ def load_item_image_metadata():
         return {}
 
     try:
-        with open(ITEM_IMAGE_METADATA_FILE, "r", encoding="utf-8") as file:
+        with open(ITEM_IMAGE_METADATA_FILE, "r", encoding="utf-8-sig") as file:
             data = json.load(file)
             if isinstance(data, dict):
                 return data
@@ -1624,6 +1624,18 @@ def save_item_image_metadata(metadata_map):
             json.dump(payload, file, indent=2, sort_keys=True)
     except OSError as exc:
         print("Could not save item image metadata:", exc)
+
+def get_cached_item_image_path(image_url):
+    if not isinstance(image_url, str):
+        return None
+    if not image_url.startswith("/static/item-images/"):
+        return None
+    relative_path = image_url.lstrip("/").replace("/", os.sep)
+    return os.path.normpath(relative_path)
+
+def cached_item_image_exists(image_url):
+    file_path = get_cached_item_image_path(image_url)
+    return bool(file_path and os.path.exists(file_path))
 
 def remove_exact_item_image_state(item_name, delete_cached_file=True):
     normalized_name = normalize_item_image_key(item_name)
@@ -3827,6 +3839,9 @@ def find_item_image_via_ai(item_name, excluded_hosts=None):
     return None
 
 def store_item_image(item_name, image_url):
+    if isinstance(image_url, str) and image_url.startswith("http"):
+        image_url = cache_item_image_locally(item_name, image_url)
+
     with _item_images_lock:
         image_map = load_item_image_map()
         image_map[item_name] = image_url
@@ -3849,6 +3864,7 @@ def store_item_image_result(item_name, result, trigger="manual"):
         metadata_map = load_item_image_metadata()
         metadata_map[item_name] = {
             "image_url": image_url,
+            "source_image_url": result["image_url"],
             "source_url": result.get("source_url", ""),
             "note": result.get("note", ""),
             "validation": result.get("validation", {}),
@@ -3867,10 +3883,26 @@ def localize_existing_item_images():
     updated_metadata = dict(metadata_map)
 
     for item_name, image_url in image_map.items():
-        if isinstance(image_url, str) and image_url.startswith("/static/item-images/"):
+        if isinstance(image_url, str) and image_url.startswith("/static/item-images/") and cached_item_image_exists(image_url):
             continue
 
-        source_url = metadata_map.get(item_name, {}).get("source_url", "")
+        existing_meta = metadata_map.get(item_name, {})
+        if isinstance(image_url, str) and image_url.startswith("/static/item-images/"):
+            source_image_url = existing_meta.get("source_image_url", "")
+            if source_image_url:
+                image_url = source_image_url
+            else:
+                updated_metadata[item_name] = {
+                    **existing_meta,
+                    "image_url": image_url,
+                    "status": IMAGE_STATUS_FAILED,
+                    "note": "Cached image file is missing and no original source image URL is available to re-download it.",
+                    "trigger": "localize_existing_images_missing_file",
+                    "updated_at": datetime.now().isoformat(timespec="seconds"),
+                }
+                continue
+
+        source_url = existing_meta.get("source_url", "")
         local_url = cache_item_image_locally(item_name, image_url, source_url)
 
         if local_url == image_url and image_url.startswith("http"):
@@ -3888,10 +3920,12 @@ def localize_existing_item_images():
                 )
                 updated_metadata[item_name] = {
                     "image_url": local_url,
+                    "source_image_url": refreshed["image_url"],
                     "source_url": refreshed.get("source_url", ""),
                     "note": refreshed.get("note", ""),
                     "validation": refreshed.get("validation", {}),
                     "trigger": "localize_existing_images_refresh",
+                    "status": IMAGE_STATUS_SUCCESS,
                     "updated_at": datetime.now().isoformat(timespec="seconds"),
                 }
 
@@ -3899,10 +3933,12 @@ def localize_existing_item_images():
         existing_meta = updated_metadata.get(item_name, {})
         updated_metadata[item_name] = {
             "image_url": local_url,
+            "source_image_url": existing_meta.get("source_image_url", image_url if isinstance(image_url, str) and image_url.startswith("http") else ""),
             "source_url": existing_meta.get("source_url", source_url),
             "note": existing_meta.get("note", ""),
             "validation": existing_meta.get("validation", {}),
             "trigger": existing_meta.get("trigger", "localize_existing_images"),
+            "status": IMAGE_STATUS_SUCCESS if isinstance(local_url, str) and local_url.startswith("/static/item-images/") else existing_meta.get("status", IMAGE_STATUS_FAILED),
             "updated_at": datetime.now().isoformat(timespec="seconds"),
         }
 
@@ -4019,7 +4055,16 @@ def refresh_current_item_images():
         try:
             result = find_item_image_via_ai(item_name)
             if result and result.get("image_url"):
-                refreshed[item_name] = result["image_url"]
+                local_url = cache_item_image_locally(
+                    item_name,
+                    result["image_url"],
+                    result.get("source_url", ""),
+                )
+                refreshed[item_name] = {
+                    **result,
+                    "source_image_url": result["image_url"],
+                    "image_url": local_url,
+                }
         except Exception as exc:
             print(f"Image refresh failed for {item_name}: {exc}")
 
@@ -4027,17 +4072,22 @@ def refresh_current_item_images():
         metadata_map = load_item_image_metadata()
         with _item_images_lock:
             image_map = load_item_image_map()
-            image_map.update(refreshed)
+            image_map.update({
+                item_name: result["image_url"]
+                for item_name, result in refreshed.items()
+            })
             save_item_image_map(image_map)
 
-            for item_name, image_url in refreshed.items():
+            for item_name, result in refreshed.items():
                 existing_meta = metadata_map.get(item_name, {})
                 metadata_map[item_name] = {
-                    "image_url": image_url,
-                    "source_url": existing_meta.get("source_url", ""),
-                    "note": existing_meta.get("note", ""),
-                    "validation": existing_meta.get("validation", {}),
+                    "image_url": result["image_url"],
+                    "source_image_url": result.get("source_image_url", ""),
+                    "source_url": result.get("source_url", existing_meta.get("source_url", "")),
+                    "note": result.get("note", existing_meta.get("note", "")),
+                    "validation": result.get("validation", existing_meta.get("validation", {})),
                     "trigger": "refresh_current_items",
+                    "status": IMAGE_STATUS_SUCCESS,
                     "updated_at": datetime.now().isoformat(timespec="seconds"),
                 }
             save_item_image_metadata(metadata_map)
@@ -4049,6 +4099,7 @@ def revalidate_existing_item_images():
         current_map = load_item_image_map()
 
     approved = {}
+    approved_source_urls = {}
     for item_name, image_url in current_map.items():
         try:
             live_ok, _ = is_live_image_url(image_url)
@@ -4057,7 +4108,10 @@ def revalidate_existing_item_images():
 
             validation = validate_item_image_via_ai(item_name, image_url)
             if validation and validation.get("approved"):
-                approved[item_name] = image_url
+                local_url = cache_item_image_locally(item_name, image_url)
+                if isinstance(local_url, str) and local_url.startswith("/static/item-images/"):
+                    approved[item_name] = local_url
+                    approved_source_urls[item_name] = image_url
         except Exception as exc:
             print(f"Image revalidation failed for {item_name}: {exc}")
 
@@ -4071,10 +4125,12 @@ def revalidate_existing_item_images():
                 existing_meta = metadata_map.get(item_name, {})
                 approved_metadata[item_name] = {
                     "image_url": image_url,
+                    "source_image_url": existing_meta.get("source_image_url", approved_source_urls.get(item_name, "")),
                     "source_url": existing_meta.get("source_url", ""),
                     "note": existing_meta.get("note", ""),
                     "validation": existing_meta.get("validation", {}),
                     "trigger": existing_meta.get("trigger", "revalidated_existing_images"),
+                    "status": IMAGE_STATUS_SUCCESS,
                     "updated_at": datetime.now().isoformat(timespec="seconds"),
                 }
             save_item_image_metadata(approved_metadata)
